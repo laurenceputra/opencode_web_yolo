@@ -260,12 +260,13 @@ EOF
 show_health() {
   local status=0
   local image_wrapper_version image_opencode_version
-  local runtime_home runtime_xdg_config runtime_xdg_data
-  local container_home_env container_xdg_config_env container_xdg_data_env
+  local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
+  local container_home_env container_xdg_config_env container_xdg_data_env container_xdg_state_env
 
   runtime_home="${OPENCODE_WEB_YOLO_HOME}"
   runtime_xdg_config="${OPENCODE_WEB_YOLO_HOME}/.config"
   runtime_xdg_data="${OPENCODE_WEB_YOLO_HOME}/.local/share"
+  runtime_xdg_state="${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state"
 
   printf '%s\n' "opencode_web_yolo health report"
   printf '%s\n' "  wrapper_version=${WRAPPER_VERSION}"
@@ -283,6 +284,7 @@ show_health() {
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
+  printf '%s\n' "  runtime_env_xdg_state_home=${runtime_xdg_state}"
 
   if command -v docker >/dev/null 2>&1; then
     printf '%s\n' "  docker_cli=ok"
@@ -319,14 +321,17 @@ show_health() {
       container_home_env="$(docker inspect "${OPENCODE_WEB_CONTAINER_NAME}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^HOME=' | tail -n 1 || true)"
       container_xdg_config_env="$(docker inspect "${OPENCODE_WEB_CONTAINER_NAME}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^XDG_CONFIG_HOME=' | tail -n 1 || true)"
       container_xdg_data_env="$(docker inspect "${OPENCODE_WEB_CONTAINER_NAME}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^XDG_DATA_HOME=' | tail -n 1 || true)"
+      container_xdg_state_env="$(docker inspect "${OPENCODE_WEB_CONTAINER_NAME}" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E '^XDG_STATE_HOME=' | tail -n 1 || true)"
       printf '%s\n' "  container_env_home=${container_home_env:-missing}"
       printf '%s\n' "  container_env_xdg_config_home=${container_xdg_config_env:-missing}"
       printf '%s\n' "  container_env_xdg_data_home=${container_xdg_data_env:-missing}"
+      printf '%s\n' "  container_env_xdg_state_home=${container_xdg_state_env:-missing}"
     else
       printf '%s\n' "  container_present=no"
       printf '%s\n' "  container_env_home=missing"
       printf '%s\n' "  container_env_xdg_config_home=missing"
       printf '%s\n' "  container_env_xdg_data_home=missing"
+      printf '%s\n' "  container_env_xdg_state_home=missing"
     fi
   fi
 
@@ -485,7 +490,7 @@ prepare_runtime_container() {
 main() {
   local mode use_gh mount_ssh
   local gh_host_config_dir
-  local runtime_home runtime_xdg_config runtime_xdg_data
+  local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local -a passthrough docker_args app_cmd docker_cmd
 
   mode="run"
@@ -576,6 +581,7 @@ main() {
   runtime_home="${OPENCODE_WEB_YOLO_HOME}"
   runtime_xdg_config="${OPENCODE_WEB_YOLO_HOME}/.config"
   runtime_xdg_data="${OPENCODE_WEB_YOLO_HOME}/.local/share"
+  runtime_xdg_state="${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state"
 
   mkdir -p "${OPENCODE_WEB_CONFIG_DIR}" "${OPENCODE_WEB_DATA_DIR}"
 
@@ -595,6 +601,7 @@ main() {
     -e "HOME=${runtime_home}"
     -e "XDG_CONFIG_HOME=${runtime_xdg_config}"
     -e "XDG_DATA_HOME=${runtime_xdg_data}"
+    -e "XDG_STATE_HOME=${runtime_xdg_state}"
     -v "${PWD}:${OPENCODE_WEB_YOLO_WORKDIR}"
     -v "${OPENCODE_WEB_CONFIG_DIR}:${OPENCODE_WEB_YOLO_HOME}/.config/opencode"
     -v "${OPENCODE_WEB_DATA_DIR}:${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode"
@@ -648,6 +655,7 @@ main() {
     printf '%s\n' "runtime_env_home=${runtime_home}"
     printf '%s\n' "runtime_env_xdg_config_home=${runtime_xdg_config}"
     printf '%s\n' "runtime_env_xdg_data_home=${runtime_xdg_data}"
+    printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
     printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
     printf '%s\n' "docker_command:"

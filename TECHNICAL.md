@@ -31,6 +31,7 @@ Mount model:
   - `HOME=${OPENCODE_WEB_YOLO_HOME}`
   - `XDG_CONFIG_HOME=${OPENCODE_WEB_YOLO_HOME}/.config`
   - `XDG_DATA_HOME=${OPENCODE_WEB_YOLO_HOME}/.local/share`
+  - `XDG_STATE_HOME=${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state`
   - this prevents user-remap drift (for example writes to `/home/ubuntu/...`) and keeps state on mounted host paths
 - Optional `-gh`:
   - Validates host `gh` binary and `gh auth status`.
@@ -55,6 +56,7 @@ Image metadata files:
 
 Entrypoint behavior:
 - maps runtime user/group to host UID/GID.
+- pins runtime passwd home to `${OPENCODE_WEB_YOLO_HOME}` to keep SSH/git home resolution aligned.
 - ensures writable home/config/data/workspace paths.
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.

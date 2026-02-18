@@ -8,6 +8,7 @@ OPENCODE_WEB_YOLO_HOME="${OPENCODE_WEB_YOLO_HOME:-/home/opencode}"
 OPENCODE_WEB_YOLO_CLEANUP="${OPENCODE_WEB_YOLO_CLEANUP:-1}"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${OPENCODE_WEB_YOLO_HOME}/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${OPENCODE_WEB_YOLO_HOME}/.local/share}"
+XDG_STATE_HOME="${XDG_STATE_HOME:-${XDG_DATA_HOME}/opencode/state}"
 
 if [ -z "${OPENCODE_SERVER_PASSWORD:-}" ]; then
   printf '%s\n' "[opencode_web_yolo] ERROR: OPENCODE_SERVER_PASSWORD must be set and non-empty." >&2
@@ -28,12 +29,18 @@ elif id -u "${LOCAL_USER}" >/dev/null 2>&1; then
   usermod -u "${LOCAL_UID}" -g "${LOCAL_GID}" "${LOCAL_USER}" >/dev/null 2>&1 || true
   runtime_user="${LOCAL_USER}"
 else
-  useradd -m -u "${LOCAL_UID}" -g "${LOCAL_GID}" -s /bin/bash "${LOCAL_USER}"
+  useradd -m -d "${OPENCODE_WEB_YOLO_HOME}" -u "${LOCAL_UID}" -g "${LOCAL_GID}" -s /bin/bash "${LOCAL_USER}"
   runtime_user="${LOCAL_USER}"
+fi
+
+current_home="$(getent passwd "${runtime_user}" | cut -d: -f6)"
+if [ "${current_home}" != "${OPENCODE_WEB_YOLO_HOME}" ]; then
+  usermod -d "${OPENCODE_WEB_YOLO_HOME}" "${runtime_user}" >/dev/null 2>&1 || true
 fi
 
 mkdir -p "${XDG_CONFIG_HOME}/opencode"
 mkdir -p "${XDG_DATA_HOME}/opencode"
+mkdir -p "${XDG_STATE_HOME}"
 mkdir -p /workspace
 
 # Avoid recursive chown on HOME: read-only mounts (for example ~/.config/gh or ~/.ssh)
@@ -41,6 +48,7 @@ mkdir -p /workspace
 chown "${LOCAL_UID}:${LOCAL_GID}" "${OPENCODE_WEB_YOLO_HOME}" >/dev/null 2>&1 || true
 chown "${LOCAL_UID}:${LOCAL_GID}" "${XDG_CONFIG_HOME}" >/dev/null 2>&1 || true
 chown "${LOCAL_UID}:${LOCAL_GID}" "${XDG_DATA_HOME}" >/dev/null 2>&1 || true
+chown "${LOCAL_UID}:${LOCAL_GID}" "${XDG_STATE_HOME}" >/dev/null 2>&1 || true
 chown -R "${LOCAL_UID}:${LOCAL_GID}" "${XDG_CONFIG_HOME}/opencode" >/dev/null 2>&1 || true
 chown -R "${LOCAL_UID}:${LOCAL_GID}" "${XDG_DATA_HOME}/opencode" >/dev/null 2>&1 || true
 chown -R "${LOCAL_UID}:${LOCAL_GID}" /workspace
@@ -58,4 +66,5 @@ trap cleanup EXIT
 export HOME="${OPENCODE_WEB_YOLO_HOME}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME}"
 export XDG_DATA_HOME="${XDG_DATA_HOME}"
-exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" gosu "${runtime_user}" "$@"
+export XDG_STATE_HOME="${XDG_STATE_HOME}"
+exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_STATE_HOME="${XDG_STATE_HOME}" gosu "${runtime_user}" "$@"

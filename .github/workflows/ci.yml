@@ -22,6 +22,7 @@ jobs:
           bash -n tests/test_launch_mode_flags.sh
           bash -n tests/test_health.sh
           bash -n tests/test_entrypoint_auth_guard.sh
+          bash -n tests/test_entrypoint_home_pin.sh
           bash -n tests/test_docs_apache_endpoints.sh
           bash -n tests/test_help.sh
           bash -n tests/test_auth_required.sh
@@ -43,6 +44,7 @@ jobs:
           shellcheck tests/test_launch_mode_flags.sh
           shellcheck tests/test_health.sh
           shellcheck tests/test_entrypoint_auth_guard.sh
+          shellcheck tests/test_entrypoint_home_pin.sh
           shellcheck tests/test_docs_apache_endpoints.sh
           shellcheck tests/test_help.sh
           shellcheck tests/test_auth_required.sh
