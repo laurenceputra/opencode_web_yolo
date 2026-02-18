@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCode Web Runtime"
+  short_description: "Implement runtime wrapper and container behavior"
+  default_prompt: "Use $opencode-web-runtime to implement or change wrapper CLI, Docker runtime, auth enforcement, and mount behavior for opencode_web_yolo."

@@ -1,0 +1,13 @@
+.git
+.github
+.spec
+.vscode
+.idea
+node_modules
+*.log
+README.md
+TECHNICAL.md
+CHANGELOG.md
+LICENSE
+SECURITY.md
+CONTRIBUTING.md

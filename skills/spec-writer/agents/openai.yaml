@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec Writer"
+  short_description: "Draft specs and surface spec gaps"
+  default_prompt: "Use $spec-writer to create clear, actionable specs and explicitly list spec gaps and open decisions with recommended defaults."

@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Bash syntax checks
+        run: |
+          bash -n .opencode_web_yolo.sh
+          bash -n .opencode_web_yolo_config.sh
+          bash -n .opencode_web_yolo_entrypoint.sh
+          bash -n install.sh
+          bash -n tests/test_helpers.sh
+          bash -n tests/test_dry_run.sh
+          bash -n tests/test_launch_mode_flags.sh
+          bash -n tests/test_health.sh
+          bash -n tests/test_entrypoint_auth_guard.sh
+          bash -n tests/test_docs_apache_endpoints.sh
+          bash -n tests/test_help.sh
+          bash -n tests/test_auth_required.sh
+          bash -n tests/test_sensitive_mounts.sh
+          bash -n tests/test_spec_ignore.sh
+          bash -n tests/test_source_of_truth_refs.sh
+          bash -n tests/test_docs_required_sections.sh
+          bash -n tests/test_technical_required_sections.sh
+          bash -n tests/run.sh
+          bash -n tests/version_guard.sh
+      - name: Shellcheck
+        run: |
+          shellcheck .opencode_web_yolo.sh
+          shellcheck .opencode_web_yolo_config.sh
+          shellcheck .opencode_web_yolo_entrypoint.sh
+          shellcheck install.sh
+          shellcheck tests/test_helpers.sh
+          shellcheck tests/test_dry_run.sh
+          shellcheck tests/test_launch_mode_flags.sh
+          shellcheck tests/test_health.sh
+          shellcheck tests/test_entrypoint_auth_guard.sh
+          shellcheck tests/test_docs_apache_endpoints.sh
+          shellcheck tests/test_help.sh
+          shellcheck tests/test_auth_required.sh
+          shellcheck tests/test_sensitive_mounts.sh
+          shellcheck tests/test_spec_ignore.sh
+          shellcheck tests/test_source_of_truth_refs.sh
+          shellcheck tests/test_docs_required_sections.sh
+          shellcheck tests/test_technical_required_sections.sh
+          shellcheck tests/run.sh
+          shellcheck tests/version_guard.sh
+
+  behavior-checks:
+    runs-on: ubuntu-latest
+    needs: shell-lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run behavior tests
+        run: bash tests/run.sh
+
+  install-validation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    needs: shell-lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate install flow
+        run: |
+          bash install.sh
+          ~/.local/bin/opencode_web_yolo --version
+
+  docker-validation:
+    runs-on: ubuntu-latest
+    needs: shell-lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build runtime image
+        run: docker build -f .opencode_web_yolo.Dockerfile -t opencode_web_yolo:ci .
+      - name: Validate required binaries
+        run: |
+          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh'
+
+  version-discipline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Validate version format and drift guard
+        run: bash tests/version_guard.sh

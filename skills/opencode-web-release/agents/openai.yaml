@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCode Web Release"
+  short_description: "Manage versioning, updates, and install flow"
+  default_prompt: "Use $opencode-web-release to implement version/update checks, rebuild triggers, install.sh behavior, and completion lifecycle for opencode_web_yolo."

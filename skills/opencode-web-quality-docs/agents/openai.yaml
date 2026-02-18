@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCode Web Quality + Docs"
+  short_description: "Own CI tests and operator documentation"
+  default_prompt: "Use $opencode-web-quality-docs to add tests, CI checks, and accurate README/TECHNICAL guidance for opencode_web_yolo."

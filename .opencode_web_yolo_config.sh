@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# shellcheck disable=SC2034
+OPENCODE_WEB_YOLO_CONFIG_FILE_DEFAULT="${HOME}/.opencode_web_yolo/config"
+OPENCODE_WEB_CONFIG_FILE="${OPENCODE_WEB_YOLO_CONFIG_FILE:-$OPENCODE_WEB_YOLO_CONFIG_FILE_DEFAULT}"
+
+# Runtime defaults
+: "${OPENCODE_WEB_YOLO_IMAGE:=opencode_web_yolo:latest}"
+: "${OPENCODE_WEB_BASE_IMAGE:=node:20-slim}"
+: "${OPENCODE_WEB_PORT:=4096}"
+: "${OPENCODE_WEB_HOSTNAME:=0.0.0.0}"
+: "${OPENCODE_WEB_YOLO_HOME:=/home/opencode}"
+: "${OPENCODE_WEB_YOLO_WORKDIR:=/workspace}"
+: "${OPENCODE_WEB_YOLO_CLEANUP:=1}"
+: "${OPENCODE_WEB_CONTAINER_NAME:=opencode_web_yolo}"
+: "${OPENCODE_WEB_RESTART_POLICY:=unless-stopped}"
+: "${OPENCODE_WEB_SKIP_UPDATE_CHECK:=0}"
+: "${OPENCODE_WEB_SKIP_VERSION_CHECK:=0}"
+: "${OPENCODE_WEB_BUILD_NO_CACHE:=0}"
+: "${OPENCODE_WEB_BUILD_PULL:=0}"
+: "${OPENCODE_WEB_AUTO_PULL:=1}"
+: "${OPENCODE_WEB_RUN_DETACHED:=1}"
+: "${OPENCODE_WEB_DRY_RUN:=0}"
+: "${OPENCODE_WEB_VERBOSE:=0}"
+: "${OPENCODE_WEB_YOLO_BRANCH:=main}"
+: "${OPENCODE_WEB_NPM_PACKAGE:=opencode-ai}"
+: "${OPENCODE_SERVER_USERNAME:=opencode}"
+
+if [ -f "$OPENCODE_WEB_CONFIG_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$OPENCODE_WEB_CONFIG_FILE"
+fi
+
+: "${OPENCODE_WEB_CONFIG_DIR:=${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+: "${OPENCODE_WEB_DATA_DIR:=${XDG_DATA_HOME:-$HOME/.local/share}/opencode}"
