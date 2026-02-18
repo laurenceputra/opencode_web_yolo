@@ -8,7 +8,7 @@ jobs:
   trivy-image-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build image
         run: docker build -f .opencode_web_yolo.Dockerfile -t opencode_web_yolo:scan .
       - name: Scan image with Trivy
