@@ -68,12 +68,14 @@ Entrypoint behavior:
 ## Proxy Streaming Notes
 
 - OpenCode browser output uses long-lived event streams.
+- OpenCode terminal sessions use websocket connections under `/pty` (for example `/pty/<id>/connect`).
 - Apache reverse proxy config must treat stream endpoints as SSE-style traffic:
   - `/global/event` and `/event` must both be stream-safe
   - longer proxy timeouts
   - chunked streaming enabled
   - compression disabled on event-stream routes
-- Websocket proxy rules are optional compatibility paths, not a replacement for stream-safe SSE handling.
+- Reverse proxies must forward `/pty` with websocket upgrade semantics (`ws://` upstream on Apache with `mod_proxy_wstunnel`).
+- Websocket proxy rules are optional compatibility paths for non-PTY endpoints, not a replacement for stream-safe SSE handling.
 
 ## Update and Re-exec
 
