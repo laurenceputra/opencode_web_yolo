@@ -116,7 +116,7 @@ server {
 
 ## Reverse Proxy (Apache)
 
-Enable modules: `proxy`, `proxy_http`, `headers`, `ssl`, `deflate`.
+Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `deflate`.
 
 ```apache
 <VirtualHost *:443>
@@ -139,10 +139,14 @@ Enable modules: `proxy`, `proxy_http`, `headers`, `ssl`, `deflate`.
     ProxyPass        /event http://127.0.0.1:4096/event timeout=600 retry=0
     ProxyPassReverse /event http://127.0.0.1:4096/event
 
+    # Terminal PTY endpoint uses websocket upgrades.
+    ProxyPass        /pty ws://127.0.0.1:4096/pty retry=0
+    ProxyPassReverse /pty ws://127.0.0.1:4096/pty
+
     ProxyPass        / http://127.0.0.1:4096/ timeout=120 retry=0
     ProxyPassReverse / http://127.0.0.1:4096/
 
-    # Optional compatibility path if websocket endpoints are in use:
+    # Optional compatibility path if additional websocket endpoints are in use:
     # ProxyPass        /ws ws://127.0.0.1:4096/ws
     # ProxyPassReverse /ws ws://127.0.0.1:4096/ws
 </VirtualHost>
@@ -170,6 +174,7 @@ Enable modules: `proxy`, `proxy_http`, `headers`, `ssl`, `deflate`.
 - Run `opencode_web_yolo health` for Docker/image/auth diagnostics.
 - Use `OPENCODE_WEB_DRY_RUN=1` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
+- If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/pty` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules).
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.
 - Workspace UI state (for example expanded workspaces and last-open session shortcut) is stored in browser localStorage by OpenCode Web, so it is not shared across different browsers/profiles.
 - Session/project data still persists server-side in `~/.local/share/opencode/opencode.db`; use explicit session URLs (for example `/<workspace>/session/<id>`) when switching browsers.
