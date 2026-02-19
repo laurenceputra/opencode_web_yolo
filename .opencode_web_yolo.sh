@@ -285,6 +285,7 @@ show_health() {
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
   printf '%s\n' "  runtime_env_xdg_state_home=${runtime_xdg_state}"
+  printf '%s\n' "  workspace_ui_state_scope=browser-local-storage"
 
   if command -v docker >/dev/null 2>&1; then
     printf '%s\n' "  docker_cli=ok"

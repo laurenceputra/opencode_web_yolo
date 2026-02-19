@@ -33,6 +33,9 @@ Mount model:
   - `XDG_DATA_HOME=${OPENCODE_WEB_YOLO_HOME}/.local/share`
   - `XDG_STATE_HOME=${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state`
   - this prevents user-remap drift (for example writes to `/home/ubuntu/...`) and keeps state on mounted host paths
+- Persistence scope:
+  - server-side OpenCode state (projects/sessions/provider auth/db) persists on mounted host data paths.
+  - workspace UI layout state in OpenCode Web is browser-local (`localStorage`) and is not shared across different browsers/profiles.
 - Optional `-gh`:
   - Validates host `gh` binary and `gh auth status`.
   - Mounts host gh config/auth (ro) and prints warning.
@@ -110,6 +113,7 @@ Tests and CI assert:
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
 - health output includes persistence/lifecycle settings.
+- health output includes browser-vs-server persistence scope visibility.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
 - `VERSION` semver format and runtime-file/version drift guard.
 - Security workflow runs a Trivy image scan on every push/PR.

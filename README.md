@@ -4,6 +4,14 @@
 
 ## Quickstart
 
+Install directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/laurenceputra/opencode_web_yolo/main/install.sh | bash
+```
+
+Then run:
+
 ```bash
 ./install.sh
 export OPENCODE_SERVER_PASSWORD='change-me-now'
@@ -163,3 +171,5 @@ Enable modules: `proxy`, `proxy_http`, `headers`, `ssl`, `deflate`.
 - Use `OPENCODE_WEB_DRY_RUN=1` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.
+- Workspace UI state (for example expanded workspaces and last-open session shortcut) is stored in browser localStorage by OpenCode Web, so it is not shared across different browsers/profiles.
+- Session/project data still persists server-side in `~/.local/share/opencode/opencode.db`; use explicit session URLs (for example `/<workspace>/session/<id>`) when switching browsers.
