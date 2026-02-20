@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.2] - 2026-02-20
+
+- Ensured shellcheck follows wrapper-sourced config to avoid CI false positives.
+- Pinned npm version in the runtime image build to include patched dependency versions required by security scans.
+
 ## [0.1.1] - 2026-02-20
 
 - Fixed install flow so `curl -fsSL .../install.sh | bash` bootstraps required runtime files instead of expecting a local checkout.

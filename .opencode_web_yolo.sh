@@ -239,6 +239,7 @@ export OPENCODE_WEB_HOSTNAME=0.0.0.0
 export OPENCODE_WEB_YOLO_IMAGE=opencode_web_yolo:latest
 export OPENCODE_WEB_BASE_IMAGE=node:20-slim
 export OPENCODE_WEB_NPM_PACKAGE=opencode-ai
+export OPENCODE_WEB_NPM_VERSION=11.10.1
 export OPENCODE_WEB_CONTAINER_NAME=opencode_web_yolo
 export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 export OPENCODE_WEB_RUN_DETACHED=1
@@ -384,6 +385,7 @@ build_image() {
   build_cmd+=(
     --build-arg "BASE_IMAGE=${OPENCODE_WEB_BASE_IMAGE}"
     --build-arg "WRAPPER_VERSION=${WRAPPER_VERSION}"
+    --build-arg "NPM_VERSION=${OPENCODE_WEB_NPM_VERSION}"
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
     --build-arg "OPENCODE_VERSION=${expected_opencode_version:-latest}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"

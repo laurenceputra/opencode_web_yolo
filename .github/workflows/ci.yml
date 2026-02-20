@@ -35,7 +35,7 @@ jobs:
           bash -n tests/version_guard.sh
       - name: Shellcheck
         run: |
-          shellcheck .opencode_web_yolo.sh
+          shellcheck -x .opencode_web_yolo.sh
           shellcheck .opencode_web_yolo_config.sh
           shellcheck .opencode_web_yolo_entrypoint.sh
           shellcheck install.sh
