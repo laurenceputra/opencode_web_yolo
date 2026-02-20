@@ -1,6 +1,7 @@
 ARG BASE_IMAGE=node:20-slim
 FROM ${BASE_IMAGE}
 
+ARG NPM_VERSION=11.10.1
 ARG OPENCODE_NPM_PACKAGE=opencode-ai
 ARG OPENCODE_VERSION=latest
 ARG WRAPPER_VERSION=0.0.0
@@ -20,6 +21,8 @@ RUN apt-get update \
     sudo \
   && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g "npm@${NPM_VERSION}"
+
 RUN if [ "${OPENCODE_VERSION}" = "latest" ]; then \
       npm install -g "${OPENCODE_NPM_PACKAGE}" ; \
     else \
@@ -35,4 +38,3 @@ RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/opencode_web_yolo_entrypoint.sh"]
-

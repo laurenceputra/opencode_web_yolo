@@ -27,6 +27,7 @@ chmod +x "${FAKE_BIN}/gh"
 
 export PATH="${FAKE_BIN}:${PATH}"
 export HOME="${TMP_DIR}/home"
+export XDG_CONFIG_HOME="${HOME}/.config"
 mkdir -p "${HOME}/.config/gh" "${HOME}/.ssh"
 printf '%s\n' "[user]" >"${HOME}/.gitconfig"
 export OPENCODE_WEB_DRY_RUN=1

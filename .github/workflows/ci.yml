@@ -1,7 +1,6 @@
 name: CI
 
 on:
-  push:
   pull_request:
 
 jobs:
@@ -35,26 +34,26 @@ jobs:
           bash -n tests/version_guard.sh
       - name: Shellcheck
         run: |
-          shellcheck .opencode_web_yolo.sh
+          shellcheck -x .opencode_web_yolo.sh
           shellcheck .opencode_web_yolo_config.sh
           shellcheck .opencode_web_yolo_entrypoint.sh
           shellcheck install.sh
-          shellcheck tests/test_helpers.sh
-          shellcheck tests/test_dry_run.sh
-          shellcheck tests/test_launch_mode_flags.sh
-          shellcheck tests/test_health.sh
-          shellcheck tests/test_entrypoint_auth_guard.sh
-          shellcheck tests/test_entrypoint_home_pin.sh
-          shellcheck tests/test_docs_apache_endpoints.sh
-          shellcheck tests/test_help.sh
-          shellcheck tests/test_auth_required.sh
-          shellcheck tests/test_sensitive_mounts.sh
-          shellcheck tests/test_spec_ignore.sh
-          shellcheck tests/test_source_of_truth_refs.sh
-          shellcheck tests/test_docs_required_sections.sh
-          shellcheck tests/test_technical_required_sections.sh
-          shellcheck tests/run.sh
-          shellcheck tests/version_guard.sh
+          shellcheck -x tests/test_helpers.sh
+          shellcheck -x tests/test_dry_run.sh
+          shellcheck -x tests/test_launch_mode_flags.sh
+          shellcheck -x tests/test_health.sh
+          shellcheck -x tests/test_entrypoint_auth_guard.sh
+          shellcheck -x tests/test_entrypoint_home_pin.sh
+          shellcheck -x tests/test_docs_apache_endpoints.sh
+          shellcheck -x tests/test_help.sh
+          shellcheck -x tests/test_auth_required.sh
+          shellcheck -x tests/test_sensitive_mounts.sh
+          shellcheck -x tests/test_spec_ignore.sh
+          shellcheck -x tests/test_source_of_truth_refs.sh
+          shellcheck -x tests/test_docs_required_sections.sh
+          shellcheck -x tests/test_technical_required_sections.sh
+          shellcheck -x tests/run.sh
+          shellcheck -x tests/version_guard.sh
 
   behavior-checks:
     runs-on: ubuntu-latest
