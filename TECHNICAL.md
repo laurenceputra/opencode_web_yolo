@@ -15,6 +15,18 @@
   - pull-on-start by default (`OPENCODE_WEB_AUTO_PULL=1`)
 - Reverse proxy is expected in front of localhost bind.
 
+## Installation Contract
+
+- `install.sh` supports two valid install flows:
+  - repo-local install (`./install.sh`) using sibling managed files from the checkout
+  - streamed/bootstrap install (for example `curl -fsSL .../install.sh | bash`) that fetches managed files before install
+- Bootstrap fetch source defaults:
+  - repo: `OPENCODE_WEB_YOLO_REPO` when set
+  - repo fallback: current git `origin` in `${PWD}` when available
+  - final repo fallback: `laurenceputra/opencode_web_yolo`
+  - branch: `OPENCODE_WEB_YOLO_BRANCH` (default `main`)
+- Installer always installs managed runtime files into `${OPENCODE_WEB_INSTALL_HOME:-$HOME/.opencode_web_yolo}` and symlinks command to `${OPENCODE_WEB_BIN_DIR:-$HOME/.local/bin}/opencode_web_yolo`.
+
 ## Security Model
 
 Non-negotiable runtime checks:
