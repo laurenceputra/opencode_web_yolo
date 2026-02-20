@@ -16,7 +16,7 @@ fi
 assert_contains "$readme" "Install from a local clone instead:"
 
 assert_contains "$technical" "## Installation Contract"
-assert_contains "$technical" 'repo-local install (`./install.sh`)'
+assert_contains "$technical" "repo-local install (\`./install.sh\`)"
 assert_contains "$technical" "streamed/bootstrap install"
 
 printf '%s\n' "PASS: docs install flow contract"
