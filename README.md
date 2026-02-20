@@ -4,7 +4,7 @@
 
 ## Quickstart
 
-Install directly from GitHub:
+Install directly from GitHub (this already runs the installer):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laurenceputra/opencode_web_yolo/main/install.sh | bash
@@ -13,6 +13,15 @@ curl -fsSL https://raw.githubusercontent.com/laurenceputra/opencode_web_yolo/mai
 Then run:
 
 ```bash
+export OPENCODE_SERVER_PASSWORD='change-me-now'
+opencode_web_yolo
+```
+
+Install from a local clone instead:
+
+```bash
+git clone https://github.com/laurenceputra/opencode_web_yolo.git
+cd opencode_web_yolo
 ./install.sh
 export OPENCODE_SERVER_PASSWORD='change-me-now'
 opencode_web_yolo
