@@ -137,7 +137,7 @@ mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f
 Force-refresh image to latest OpenCode version:
 
 ```bash
-docker build --pull --build-arg BASE_IMAGE=node:20-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg NPM_VERSION=11.10.1 --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
+docker build --pull --build-arg BASE_IMAGE=node:20-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
 
 ## Reverse Proxy (Nginx)
