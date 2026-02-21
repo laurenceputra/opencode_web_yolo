@@ -84,9 +84,4 @@ fi
 
 export OPENCODE_INSTRUCTION_PATH="${INSTRUCTIONS}"
 
-if [ "${1:-}" = "opencode" ] && [ "${2:-}" = "web" ]; then
-  shift 2
-  set -- opencode web --instructions "${INSTRUCTIONS}" "$@"
-fi
-
 exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_STATE_HOME="${XDG_STATE_HOME}" OPENCODE_INSTRUCTION_PATH="${OPENCODE_INSTRUCTION_PATH}" gosu "${runtime_user}" "$@"

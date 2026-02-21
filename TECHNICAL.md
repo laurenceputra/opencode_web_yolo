@@ -84,6 +84,7 @@ Entrypoint behavior:
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
 - resolves instruction file from `OPENCODE_INSTRUCTION_PATH` (default `/app/AGENTS.md`).
+- does not inject unsupported OpenCode CLI flags for instruction loading; instruction selection is env/path driven.
 - falls back to `/app/AGENTS.md` if the requested instruction path is unreadable.
 - exits with an error when no readable instruction file is found.
 

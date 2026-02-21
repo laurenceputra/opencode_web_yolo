@@ -28,3 +28,4 @@ Use this file when adding or changing wrapper CLI behavior.
   - OpenCode web command
   - effective environment values
 - Unknown flags are either passed through or rejected intentionally with clear messaging.
+- Entrypoint instruction loading must not add unsupported app CLI flags; use `OPENCODE_INSTRUCTION_PATH` and mounted files.
