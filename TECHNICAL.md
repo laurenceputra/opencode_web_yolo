@@ -142,4 +142,3 @@ Tests and CI assert:
 - health output includes browser-vs-server persistence scope visibility.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
 - `VERSION` semver format and runtime-file/version drift guard.
-- Security workflow runs a Trivy image scan on every push/PR.
