@@ -20,8 +20,10 @@ jobs:
           bash -n tests/test_dry_run.sh
           bash -n tests/test_launch_mode_flags.sh
           bash -n tests/test_container_replace.sh
+          bash -n tests/wrapper-dryrun.sh
           bash -n tests/test_health.sh
           bash -n tests/test_entrypoint_auth_guard.sh
+          bash -n tests/test_entrypoint_instruction_flag.sh
           bash -n tests/test_entrypoint_home_pin.sh
           bash -n tests/test_docs_apache_endpoints.sh
           bash -n tests/test_help.sh
@@ -43,8 +45,10 @@ jobs:
           shellcheck -x tests/test_dry_run.sh
           shellcheck -x tests/test_launch_mode_flags.sh
           shellcheck -x tests/test_container_replace.sh
+          shellcheck -x tests/wrapper-dryrun.sh
           shellcheck -x tests/test_health.sh
           shellcheck -x tests/test_entrypoint_auth_guard.sh
+          shellcheck -x tests/test_entrypoint_instruction_flag.sh
           shellcheck -x tests/test_entrypoint_home_pin.sh
           shellcheck -x tests/test_docs_apache_endpoints.sh
           shellcheck -x tests/test_help.sh
