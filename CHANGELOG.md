@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.3] - 2026-02-21
+
+- Updated the behavioral test runner to invoke each test via `bash`, removing executable-bit dependence for test scripts.
+- Bumped release metadata after runtime script updates so version discipline checks pass in CI.
+
 ## [0.1.2] - 2026-02-20
 
 - Ensured shellcheck follows wrapper-sourced config to avoid CI false positives.
