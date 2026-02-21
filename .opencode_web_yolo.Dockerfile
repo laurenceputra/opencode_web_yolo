@@ -33,7 +33,11 @@ RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version
 
-COPY AGENTS.md /app/AGENTS.md
+RUN cat <<'EOF' >/app/AGENTS.md
+# opencode_web_yolo fallback instructions
+
+This is a built-in fallback instruction file used when no host AGENTS.md is mounted.
+EOF
 
 COPY .opencode_web_yolo_entrypoint.sh /usr/local/bin/opencode_web_yolo_entrypoint.sh
 RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh
