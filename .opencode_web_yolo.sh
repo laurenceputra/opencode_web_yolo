@@ -510,16 +510,21 @@ prepare_runtime_container() {
   fi
 
   running_name="$(docker ps --filter "name=^/${OPENCODE_WEB_CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null || true)"
-  if [ -n "$running_name" ]; then
-    die "Container '${OPENCODE_WEB_CONTAINER_NAME}' is already running. Stop it first with: docker stop ${OPENCODE_WEB_CONTAINER_NAME}"
-  fi
-
   if is_true "${OPENCODE_WEB_DRY_RUN}"; then
-    debug "Dry run: would remove existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    if [ -n "$running_name" ]; then
+      debug "Dry run: would stop and remove existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    else
+      debug "Dry run: would remove existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    fi
     return 0
   fi
 
-  log "Removing existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+  if [ -n "$running_name" ]; then
+    log "Stopping existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    docker stop "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to stop existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
+  fi
+
+  log "Removing existing container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
   docker rm "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to remove existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
 }
 

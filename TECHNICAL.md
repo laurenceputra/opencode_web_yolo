@@ -136,6 +136,7 @@ Controls:
 Tests and CI assert:
 - `bash -n` and `shellcheck` on touched shell scripts.
 - dry-run output contract (local-only port mapping, opencode web command, env values, config/data mounts, lifecycle flags, detach/pull defaults).
+- launch behavior replaces same-name containers by stopping running instances, then removing the old container before re-run.
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
 - health output includes persistence/lifecycle settings.
