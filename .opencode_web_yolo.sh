@@ -241,11 +241,15 @@ Preview without launching:
   opencode_web_yolo --dry-run --verbose
 
 Host instruction file selection:
-  --agents-file PATH            Explicit host AGENTS.md override (read-only).
-  OPENCODE_HOST_AGENTS=PATH     Host AGENTS.md override when --agents-file is absent.
-  Default: OpenCode global rules from ${OPENCODE_WEB_CONFIG_DIR}/AGENTS.md
-           via config mount.
-  --no-host-agents              Disable explicit host AGENTS.md override mount.
+  --agents-file PATH            Explicit host instruction file override (read-only).
+  OPENCODE_HOST_AGENTS=PATH     Host instruction file override when --agents-file is absent.
+  Default host lookup order:
+    1) ~/.config/opencode/AGENTS.md
+    2) ~/.codex/AGENTS.md
+    3) ~/.copilot/copilot-instructions.md
+    4) ~/.claude/CLAUDE.md
+  Selected file mounts to ${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md.
+  --no-host-agents              Disable host instruction file mount.
 EOF
 }
 
@@ -522,7 +526,8 @@ prepare_runtime_container() {
 main() {
   local mode use_gh mount_ssh
   local host_agents_enabled host_agents_source host_agents_path
-  local host_agents_global_path host_agents_default_path
+  local host_agents_container_path host_agents_opencode_path
+  local host_agents_codex_path host_agents_copilot_path host_agents_claude_path
   local host_agents_log host_agents_disabled
   local gh_host_config_dir
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
@@ -535,8 +540,11 @@ main() {
   host_agents_enabled=1
   host_agents_source=""
   host_agents_path=""
-  host_agents_global_path="${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md"
-  host_agents_default_path="$(expand_tilde "${OPENCODE_WEB_CONFIG_DIR}/AGENTS.md")"
+  host_agents_container_path="${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md"
+  host_agents_opencode_path="$(expand_tilde "${HOME}/.config/opencode/AGENTS.md")"
+  host_agents_codex_path="$(expand_tilde "${HOME}/.codex/AGENTS.md")"
+  host_agents_copilot_path="$(expand_tilde "${HOME}/.copilot/copilot-instructions.md")"
+  host_agents_claude_path="$(expand_tilde "${HOME}/.claude/CLAUDE.md")"
   host_agents_log=""
   host_agents_disabled=0
 
@@ -700,9 +708,20 @@ main() {
       if [ -n "${OPENCODE_HOST_AGENTS:-}" ]; then
         host_agents_source="env"
         host_agents_path="${OPENCODE_HOST_AGENTS}"
+      elif [ -f "$host_agents_opencode_path" ]; then
+        host_agents_source="opencode"
+        host_agents_path="${host_agents_opencode_path}"
+      elif [ -f "$host_agents_codex_path" ]; then
+        host_agents_source="codex"
+        host_agents_path="${host_agents_codex_path}"
+      elif [ -f "$host_agents_copilot_path" ]; then
+        host_agents_source="copilot"
+        host_agents_path="${host_agents_copilot_path}"
+      elif [ -f "$host_agents_claude_path" ]; then
+        host_agents_source="claude"
+        host_agents_path="${host_agents_claude_path}"
       else
-        host_agents_source="native"
-        host_agents_path="${host_agents_default_path}"
+        host_agents_source="none"
       fi
     fi
 
@@ -710,29 +729,25 @@ main() {
       die "--agents-file requires a non-empty host path."
     fi
 
-    if [ "$host_agents_source" = "native" ]; then
-      if [ -f "$host_agents_path" ]; then
-        if [ ! -r "$host_agents_path" ]; then
-          die "Host AGENTS.md is not readable at ${host_agents_path}."
-        fi
-        host_agents_log="Using OpenCode global AGENTS.md via config mount: ${host_agents_path}"
-      else
-        debug "Global AGENTS.md not found at ${host_agents_path}; relying on project rules and OpenCode defaults."
-      fi
+    if [ "$host_agents_source" = "none" ]; then
+      debug "No host instruction file found in default order; relying on project rules and OpenCode defaults."
     elif [ -n "$host_agents_path" ]; then
       host_agents_path="$(expand_tilde "$host_agents_path")"
       if [ -f "$host_agents_path" ]; then
         if [ ! -r "$host_agents_path" ]; then
-          die "Host AGENTS.md is not readable at ${host_agents_path}."
+          die "Host instruction file is not readable at ${host_agents_path}."
         fi
-        host_agents_log="Using host AGENTS.md from ${host_agents_source}: ${host_agents_path}"
-        docker_args+=(-v "${host_agents_path}:${host_agents_global_path}:ro")
+        host_agents_log="Using host instruction file from ${host_agents_source}: ${host_agents_path}"
+        docker_args+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
       else
-        die "Host AGENTS.md not found at ${host_agents_path}."
+        if [ "$host_agents_source" = "flag" ] || [ "$host_agents_source" = "env" ]; then
+          die "Host instruction file not found at ${host_agents_path}."
+        fi
+        debug "Host instruction file disappeared before mount: ${host_agents_path}; continuing without host mount."
       fi
     fi
   else
-    host_agents_log="Host AGENTS.md override mount disabled by --no-host-agents."
+    host_agents_log="Host instruction file mount disabled by --no-host-agents."
   fi
 
   app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")

@@ -40,10 +40,10 @@ Mount model:
   - `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.config/opencode` (rw)
   - `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode` (rw)
 - Optional host AGENTS:
-  - Native OpenCode global rules come from `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/AGENTS.md` via the default config-directory mount.
-  - Precedence for explicit overrides: `--agents-file` > `OPENCODE_HOST_AGENTS`.
-  - Override files mount read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
-  - `--no-host-agents` disables explicit override mounts.
+  - Selection precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `~/.config/opencode/AGENTS.md` > `~/.codex/AGENTS.md` > `~/.copilot/copilot-instructions.md` > `~/.claude/CLAUDE.md`.
+  - The selected host file mounts read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
+  - This normalizes Codex/Copilot/Claude instruction files to OpenCode's global rules path.
+  - `--no-host-agents` disables the selected-file mount.
 - Runtime env contract:
   - `HOME=${OPENCODE_WEB_YOLO_HOME}`
   - `XDG_CONFIG_HOME=${OPENCODE_WEB_YOLO_HOME}/.config`
