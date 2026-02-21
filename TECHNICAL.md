@@ -39,6 +39,11 @@ Mount model:
   - `${PWD}` -> `/workspace` (rw)
   - `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.config/opencode` (rw)
   - `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode` (rw)
+- Optional host AGENTS:
+  - Selection precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `~/.config/opencode/AGENTS.md` > `~/.codex/AGENTS.md` > `~/.copilot/copilot-instructions.md` > `~/.claude/CLAUDE.md`.
+  - The selected host file mounts read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
+  - This normalizes Codex/Copilot/Claude instruction files to OpenCode's global rules path.
+  - `--no-host-agents` disables the selected-file mount.
 - Runtime env contract:
   - `HOME=${OPENCODE_WEB_YOLO_HOME}`
   - `XDG_CONFIG_HOME=${OPENCODE_WEB_YOLO_HOME}/.config`
@@ -68,6 +73,7 @@ Docker image includes:
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
+- `/app/AGENTS.md` (packaged fallback document)
 
 Entrypoint behavior:
 - maps runtime user/group to host UID/GID.
@@ -76,6 +82,8 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
+- does not inject unsupported OpenCode CLI flags for instruction loading.
+- relies on OpenCode's native rules discovery (project AGENTS/CLAUDE files and global config-path rules).
 
 ## Proxy Streaming Notes
 
@@ -106,6 +114,10 @@ Image rebuild happens when any trigger is true:
 - OpenCode version metadata mismatch (unless version check disabled)
 - pull/no-cache build flags requested
 
+OpenCode install target during build:
+- defaults to `latest` (`OPENCODE_VERSION=latest`)
+- if `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` is set, build installs that explicit version
+
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
@@ -124,10 +136,10 @@ Controls:
 Tests and CI assert:
 - `bash -n` and `shellcheck` on touched shell scripts.
 - dry-run output contract (local-only port mapping, opencode web command, env values, config/data mounts, lifecycle flags, detach/pull defaults).
+- launch behavior replaces same-name containers by stopping running instances, then removing the old container before re-run.
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
 - health output includes persistence/lifecycle settings.
 - health output includes browser-vs-server persistence scope visibility.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
 - `VERSION` semver format and runtime-file/version drift guard.
-- Security workflow runs a Trivy image scan on every push/PR.

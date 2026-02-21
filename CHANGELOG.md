@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.4] - 2026-02-21
+
+- Switched the default runtime base image from `node:20-slim` to `node:22-slim` to track current Node.js LTS.
+- Updated wrapper and README defaults so generated config and manual rebuild examples use `node:22-slim`.
+
+## [0.1.3] - 2026-02-21
+
+- Updated the behavioral test runner to invoke each test via `bash`, removing executable-bit dependence for test scripts.
+- Bumped release metadata after runtime script updates so version discipline checks pass in CI.
+
 ## [0.1.2] - 2026-02-20
 
 - Ensured shellcheck follows wrapper-sourced config to avoid CI false positives.

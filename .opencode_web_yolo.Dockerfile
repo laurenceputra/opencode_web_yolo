@@ -1,7 +1,6 @@
-ARG BASE_IMAGE=node:20-slim
+ARG BASE_IMAGE=node:22-slim
 FROM ${BASE_IMAGE}
 
-ARG NPM_VERSION=11.10.1
 ARG OPENCODE_NPM_PACKAGE=opencode-ai
 ARG OPENCODE_VERSION=latest
 ARG WRAPPER_VERSION=0.0.0
@@ -21,17 +20,17 @@ RUN apt-get update \
     sudo \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g "npm@${NPM_VERSION}"
+RUN npm install -g "${OPENCODE_NPM_PACKAGE}@${OPENCODE_VERSION}"
 
-RUN if [ "${OPENCODE_VERSION}" = "latest" ]; then \
-      npm install -g "${OPENCODE_NPM_PACKAGE}" ; \
-    else \
-      npm install -g "${OPENCODE_NPM_PACKAGE}@${OPENCODE_VERSION}" ; \
-    fi
-
-RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" \
+RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version
+
+RUN cat <<'EOF' >/app/AGENTS.md
+# opencode_web_yolo fallback instructions
+
+This is a built-in fallback instruction file used when no host AGENTS.md is mounted.
+EOF
 
 COPY .opencode_web_yolo_entrypoint.sh /usr/local/bin/opencode_web_yolo_entrypoint.sh
 RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh

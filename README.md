@@ -31,6 +31,7 @@ Defaults:
 - Port: `4096`
 - Bind/publish: `127.0.0.1:4096:4096`
 - OpenCode web host inside container: `0.0.0.0`
+- OpenCode package install target: `latest` at build time
 - Container name: `opencode_web_yolo`
 - Restart policy: `unless-stopped`
 - Launch mode: background (`-d`)
@@ -52,6 +53,9 @@ opencode_web_yolo [wrapper_flags] [-- opencode_web_args...]
 Wrapper flags:
 - `--pull`
 - `--no-pull`
+- `--agents-file <host-path>`
+- `--no-host-agents`
+- `--dry-run`
 - `--detach`, `-d`
 - `--foreground`, `-f`
 - `--mount-ssh`
@@ -62,9 +66,13 @@ Wrapper flags:
 - `--version`, `version`
 - `--verbose`, `-v`
 
-Use `OPENCODE_WEB_DRY_RUN=1` to preview the exact docker command and effective settings.
+Environment variables:
+- `OPENCODE_HOST_AGENTS` (host instruction-file path when `--agents-file` is absent)
+
+Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
+If a container with the configured name already exists, wrapper launch replaces it (stops if running, then removes, then starts fresh).
 
 ## Persistence Paths
 
@@ -74,6 +82,39 @@ Use `OPENCODE_WEB_DRY_RUN=1` to preview the exact docker command and effective s
 
 Provider auth/session state (for example OpenAI and GitHub Copilot links) persists across restarts from the OpenCode data path.
 The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`) to `/home/opencode` paths so app writes always land on mounted host directories.
+
+## Instruction File Selection
+
+Host instruction-file precedence:
+1) `--agents-file <host-path>`
+2) `OPENCODE_HOST_AGENTS=<host-path>`
+3) `~/.config/opencode/AGENTS.md`
+4) `~/.codex/AGENTS.md`
+5) `~/.copilot/copilot-instructions.md`
+6) `~/.claude/CLAUDE.md`
+
+Mount behavior:
+- The selected file is mounted read-only to `/home/opencode/.config/opencode/AGENTS.md`.
+- This normalizes non-OpenCode filenames (Codex/Copilot/Claude conventions) to OpenCode's global rule path.
+- `--no-host-agents` disables this selected-file mount.
+
+Examples:
+
+```bash
+opencode_web_yolo --agents-file /path/to/my/AGENTS.md
+```
+
+```bash
+OPENCODE_HOST_AGENTS=/ci/path/AGENTS.md opencode_web_yolo
+```
+
+```bash
+opencode_web_yolo --no-host-agents
+```
+
+```bash
+opencode_web_yolo --dry-run
+```
 
 ## Operational One-Liners
 
@@ -92,7 +133,7 @@ mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f
 Force-refresh image to latest OpenCode version:
 
 ```bash
-docker build --pull --build-arg BASE_IMAGE=node:20-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg NPM_VERSION=11.10.1 --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
+docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
 
 ## Reverse Proxy (Nginx)
@@ -173,6 +214,10 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
   - Sets `GIT_CONFIG_GLOBAL=/home/opencode/.gitconfig` so git clients resolve the mounted config consistently.
   - Entrypoint also pins runtime user home resolution to `/home/opencode` for SSH/git consistency.
   - Wrapper prints a warning and recommends least-privilege credentials.
+- Host instruction-file mount:
+  - Wrapper resolves one file using the documented fallback chain and mounts it read-only to `/home/opencode/.config/opencode/AGENTS.md`.
+  - `--agents-file` and `OPENCODE_HOST_AGENTS` override all defaults.
+  - No other host config (SSH, gh, XDG) is mounted implicitly.
 
 ## Governance Files
 
@@ -181,7 +226,7 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
 ## Troubleshooting
 
 - Run `opencode_web_yolo health` for Docker/image/auth diagnostics.
-- Use `OPENCODE_WEB_DRY_RUN=1` to verify port bind, env, and mount behavior.
+- Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
 - If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/pty` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules).
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.

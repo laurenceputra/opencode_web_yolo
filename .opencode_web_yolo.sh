@@ -60,6 +60,21 @@ version_gt() {
   [ "$left" != "$right" ] && [ "$(printf '%s\n%s\n' "$left" "$right" | sort -V | tail -n 1)" = "$left" ]
 }
 
+expand_tilde() {
+  local path="$1"
+  if [ "$path" = "~" ]; then
+    printf '%s\n' "$HOME"
+    return 0
+  fi
+
+  if [ "${path#\~/}" != "$path" ]; then
+    printf '%s\n' "${HOME}/${path#\~/}"
+    return 0
+  fi
+
+  printf '%s\n' "$path"
+}
+
 resolve_repo_from_origin() {
   local origin url
   if ! command -v git >/dev/null 2>&1; then
@@ -188,6 +203,9 @@ Usage:
 Wrapper flags:
   --pull                 Force docker rebuild/pull behavior.
   --no-pull              Skip default pull-on-start behavior for this run.
+  --agents-file PATH     Mount a host AGENTS.md file read-only.
+  --no-host-agents       Skip mounting host AGENTS.md.
+  --dry-run              Print docker command and exit.
   --detach, -d           Force background mode.
   --foreground, -f       Run attached in current terminal.
   --mount-ssh            Mount host ~/.ssh as read-only (explicit).
@@ -220,6 +238,18 @@ First-time setup:
 
 Preview without launching:
   OPENCODE_WEB_DRY_RUN=1 opencode_web_yolo --verbose
+  opencode_web_yolo --dry-run --verbose
+
+Host instruction file selection:
+  --agents-file PATH            Explicit host instruction file override (read-only).
+  OPENCODE_HOST_AGENTS=PATH     Host instruction file override when --agents-file is absent.
+  Default host lookup order:
+    1) ~/.config/opencode/AGENTS.md
+    2) ~/.codex/AGENTS.md
+    3) ~/.copilot/copilot-instructions.md
+    4) ~/.claude/CLAUDE.md
+  Selected file mounts to ${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md.
+  --no-host-agents              Disable host instruction file mount.
 EOF
 }
 
@@ -237,9 +267,8 @@ write_default_config() {
 export OPENCODE_WEB_PORT=4096
 export OPENCODE_WEB_HOSTNAME=0.0.0.0
 export OPENCODE_WEB_YOLO_IMAGE=opencode_web_yolo:latest
-export OPENCODE_WEB_BASE_IMAGE=node:20-slim
+export OPENCODE_WEB_BASE_IMAGE=node:22-slim
 export OPENCODE_WEB_NPM_PACKAGE=opencode-ai
-export OPENCODE_WEB_NPM_VERSION=11.10.1
 export OPENCODE_WEB_CONTAINER_NAME=opencode_web_yolo
 export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 export OPENCODE_WEB_RUN_DETACHED=1
@@ -371,8 +400,13 @@ resolve_expected_opencode_version() {
 }
 
 build_image() {
-  local expected_opencode_version="$1"
+  local build_opencode_version
   local -a build_cmd
+
+  build_opencode_version="latest"
+  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
+    build_opencode_version="${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
+  fi
 
   build_cmd=(docker build -f "${SCRIPT_DIR}/.opencode_web_yolo.Dockerfile")
   if is_true "${OPENCODE_WEB_BUILD_PULL}"; then
@@ -385,14 +419,13 @@ build_image() {
   build_cmd+=(
     --build-arg "BASE_IMAGE=${OPENCODE_WEB_BASE_IMAGE}"
     --build-arg "WRAPPER_VERSION=${WRAPPER_VERSION}"
-    --build-arg "NPM_VERSION=${OPENCODE_WEB_NPM_VERSION}"
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
-    --build-arg "OPENCODE_VERSION=${expected_opencode_version:-latest}"
+    --build-arg "OPENCODE_VERSION=${build_opencode_version}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"
     "${SCRIPT_DIR}"
   )
 
-  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE}."
+  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE} (opencode=${build_opencode_version})."
   "${build_cmd[@]}"
 }
 
@@ -436,7 +469,7 @@ ensure_image() {
   for reason in "${reasons[@]}"; do
     log "  - ${reason}"
   done
-  build_image "$expected_opencode_version"
+  build_image
 }
 
 require_password() {
@@ -477,21 +510,30 @@ prepare_runtime_container() {
   fi
 
   running_name="$(docker ps --filter "name=^/${OPENCODE_WEB_CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null || true)"
-  if [ -n "$running_name" ]; then
-    die "Container '${OPENCODE_WEB_CONTAINER_NAME}' is already running. Stop it first with: docker stop ${OPENCODE_WEB_CONTAINER_NAME}"
-  fi
-
   if is_true "${OPENCODE_WEB_DRY_RUN}"; then
-    debug "Dry run: would remove existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    if [ -n "$running_name" ]; then
+      debug "Dry run: would stop and remove existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    else
+      debug "Dry run: would remove existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    fi
     return 0
   fi
 
-  log "Removing existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+  if [ -n "$running_name" ]; then
+    log "Stopping existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+    docker stop "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to stop existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
+  fi
+
+  log "Removing existing container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
   docker rm "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to remove existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
 }
 
 main() {
   local mode use_gh mount_ssh
+  local host_agents_enabled host_agents_source host_agents_path
+  local host_agents_container_path host_agents_opencode_path
+  local host_agents_codex_path host_agents_copilot_path host_agents_claude_path
+  local host_agents_log host_agents_disabled
   local gh_host_config_dir
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local -a passthrough docker_args app_cmd docker_cmd
@@ -500,6 +542,16 @@ main() {
   use_gh=0
   mount_ssh=0
   passthrough=()
+  host_agents_enabled=1
+  host_agents_source=""
+  host_agents_path=""
+  host_agents_container_path="${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md"
+  host_agents_opencode_path="$(expand_tilde "${HOME}/.config/opencode/AGENTS.md")"
+  host_agents_codex_path="$(expand_tilde "${HOME}/.codex/AGENTS.md")"
+  host_agents_copilot_path="$(expand_tilde "${HOME}/.copilot/copilot-instructions.md")"
+  host_agents_claude_path="$(expand_tilde "${HOME}/.claude/CLAUDE.md")"
+  host_agents_log=""
+  host_agents_disabled=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -514,6 +566,27 @@ main() {
       --no-pull)
         OPENCODE_WEB_AUTO_PULL=0
         OPENCODE_WEB_BUILD_PULL=0
+        ;;
+      --agents-file=*)
+        host_agents_enabled=1
+        host_agents_source="flag"
+        host_agents_path="${1#*=}"
+        ;;
+      --agents-file)
+        shift
+        [ "$#" -gt 0 ] || die "--agents-file requires a host path."
+        host_agents_enabled=1
+        host_agents_source="flag"
+        host_agents_path="$1"
+        ;;
+      --no-host-agents)
+        host_agents_enabled=0
+        host_agents_source="disabled"
+        host_agents_path=""
+        host_agents_disabled=1
+        ;;
+      --dry-run)
+        OPENCODE_WEB_DRY_RUN=1
         ;;
       --detach|-d)
         OPENCODE_WEB_RUN_DETACHED=1
@@ -635,6 +708,53 @@ main() {
     fi
   fi
 
+  if [ "$host_agents_enabled" -eq 1 ]; then
+    if [ -z "$host_agents_source" ]; then
+      if [ -n "${OPENCODE_HOST_AGENTS:-}" ]; then
+        host_agents_source="env"
+        host_agents_path="${OPENCODE_HOST_AGENTS}"
+      elif [ -f "$host_agents_opencode_path" ]; then
+        host_agents_source="opencode"
+        host_agents_path="${host_agents_opencode_path}"
+      elif [ -f "$host_agents_codex_path" ]; then
+        host_agents_source="codex"
+        host_agents_path="${host_agents_codex_path}"
+      elif [ -f "$host_agents_copilot_path" ]; then
+        host_agents_source="copilot"
+        host_agents_path="${host_agents_copilot_path}"
+      elif [ -f "$host_agents_claude_path" ]; then
+        host_agents_source="claude"
+        host_agents_path="${host_agents_claude_path}"
+      else
+        host_agents_source="none"
+      fi
+    fi
+
+    if [ "$host_agents_source" = "flag" ] && [ -z "$host_agents_path" ]; then
+      die "--agents-file requires a non-empty host path."
+    fi
+
+    if [ "$host_agents_source" = "none" ]; then
+      debug "No host instruction file found in default order; relying on project rules and OpenCode defaults."
+    elif [ -n "$host_agents_path" ]; then
+      host_agents_path="$(expand_tilde "$host_agents_path")"
+      if [ -f "$host_agents_path" ]; then
+        if [ ! -r "$host_agents_path" ]; then
+          die "Host instruction file is not readable at ${host_agents_path}."
+        fi
+        host_agents_log="Using host instruction file from ${host_agents_source}: ${host_agents_path}"
+        docker_args+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
+      else
+        if [ "$host_agents_source" = "flag" ] || [ "$host_agents_source" = "env" ]; then
+          die "Host instruction file not found at ${host_agents_path}."
+        fi
+        debug "Host instruction file disappeared before mount: ${host_agents_path}; continuing without host mount."
+      fi
+    fi
+  else
+    host_agents_log="Host instruction file mount disabled by --no-host-agents."
+  fi
+
   app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
   app_cmd+=("${passthrough[@]}")
 
@@ -661,11 +781,21 @@ main() {
     printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
     printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
+    printf '%s\n' "host_agents_source=${host_agents_source}"
+    printf '%s\n' "host_agents_path=${host_agents_path}"
+    printf '%s\n' "host_agents_disabled=${host_agents_disabled}"
     printf '%s\n' "docker_command:"
     printf '  '
     printf '%q ' "${docker_cmd[@]}"
     printf '\n'
+    if [ -n "$host_agents_log" ]; then
+      printf '%s\n' "${host_agents_log}"
+    fi
     return 0
+  fi
+
+  if [ -n "$host_agents_log" ]; then
+    log "${host_agents_log}"
   fi
 
   "${docker_cmd[@]}"
