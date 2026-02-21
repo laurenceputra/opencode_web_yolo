@@ -7,7 +7,7 @@ OPENCODE_WEB_CONFIG_FILE="${OPENCODE_WEB_YOLO_CONFIG_FILE:-$OPENCODE_WEB_YOLO_CO
 
 # Runtime defaults
 : "${OPENCODE_WEB_YOLO_IMAGE:=opencode_web_yolo:latest}"
-: "${OPENCODE_WEB_BASE_IMAGE:=node:20-slim}"
+: "${OPENCODE_WEB_BASE_IMAGE:=node:22-slim}"
 : "${OPENCODE_WEB_PORT:=4096}"
 : "${OPENCODE_WEB_HOSTNAME:=0.0.0.0}"
 : "${OPENCODE_WEB_YOLO_HOME:=/home/opencode}"

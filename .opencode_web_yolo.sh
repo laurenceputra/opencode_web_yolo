@@ -262,7 +262,7 @@ write_default_config() {
 export OPENCODE_WEB_PORT=4096
 export OPENCODE_WEB_HOSTNAME=0.0.0.0
 export OPENCODE_WEB_YOLO_IMAGE=opencode_web_yolo:latest
-export OPENCODE_WEB_BASE_IMAGE=node:20-slim
+export OPENCODE_WEB_BASE_IMAGE=node:22-slim
 export OPENCODE_WEB_NPM_PACKAGE=opencode-ai
 export OPENCODE_WEB_CONTAINER_NAME=opencode_web_yolo
 export OPENCODE_WEB_RESTART_POLICY=unless-stopped

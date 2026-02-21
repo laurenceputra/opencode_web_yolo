@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=node:20-slim
+ARG BASE_IMAGE=node:22-slim
 FROM ${BASE_IMAGE}
 
 ARG OPENCODE_NPM_PACKAGE=opencode-ai
