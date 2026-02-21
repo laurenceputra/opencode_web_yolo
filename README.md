@@ -31,6 +31,7 @@ Defaults:
 - Port: `4096`
 - Bind/publish: `127.0.0.1:4096:4096`
 - OpenCode web host inside container: `0.0.0.0`
+- OpenCode package install target: `latest` at build time
 - Container name: `opencode_web_yolo`
 - Restart policy: `unless-stopped`
 - Launch mode: background (`-d`)

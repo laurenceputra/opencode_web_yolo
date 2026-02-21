@@ -116,6 +116,10 @@ Image rebuild happens when any trigger is true:
 - OpenCode version metadata mismatch (unless version check disabled)
 - pull/no-cache build flags requested
 
+OpenCode install target during build:
+- defaults to `latest` (`OPENCODE_VERSION=latest`)
+- if `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` is set, build installs that explicit version
+
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`

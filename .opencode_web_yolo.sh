@@ -396,8 +396,13 @@ resolve_expected_opencode_version() {
 }
 
 build_image() {
-  local expected_opencode_version="$1"
+  local build_opencode_version
   local -a build_cmd
+
+  build_opencode_version="latest"
+  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
+    build_opencode_version="${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
+  fi
 
   build_cmd=(docker build -f "${SCRIPT_DIR}/.opencode_web_yolo.Dockerfile")
   if is_true "${OPENCODE_WEB_BUILD_PULL}"; then
@@ -412,12 +417,12 @@ build_image() {
     --build-arg "WRAPPER_VERSION=${WRAPPER_VERSION}"
     --build-arg "NPM_VERSION=${OPENCODE_WEB_NPM_VERSION}"
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
-    --build-arg "OPENCODE_VERSION=${expected_opencode_version:-latest}"
+    --build-arg "OPENCODE_VERSION=${build_opencode_version}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"
     "${SCRIPT_DIR}"
   )
 
-  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE}."
+  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE} (opencode=${build_opencode_version})."
   "${build_cmd[@]}"
 }
 
@@ -461,7 +466,7 @@ ensure_image() {
   for reason in "${reasons[@]}"; do
     log "  - ${reason}"
   done
-  build_image "$expected_opencode_version"
+  build_image
 }
 
 require_password() {
