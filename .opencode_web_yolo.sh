@@ -241,10 +241,11 @@ Preview without launching:
   opencode_web_yolo --dry-run --verbose
 
 Host instruction file selection:
-  --agents-file PATH            Explicit host AGENTS.md to mount (read-only).
-  OPENCODE_HOST_AGENTS=PATH     Host AGENTS.md when --agents-file is absent.
-  Default: auto-use ~/.codex/AGENTS.md when present.
-  --no-host-agents              Disable host AGENTS.md mount.
+  --agents-file PATH            Explicit host AGENTS.md override (read-only).
+  OPENCODE_HOST_AGENTS=PATH     Host AGENTS.md override when --agents-file is absent.
+  Default: OpenCode global rules from ${OPENCODE_WEB_CONFIG_DIR}/AGENTS.md
+           via config mount.
+  --no-host-agents              Disable explicit host AGENTS.md override mount.
 EOF
 }
 
@@ -521,6 +522,7 @@ prepare_runtime_container() {
 main() {
   local mode use_gh mount_ssh
   local host_agents_enabled host_agents_source host_agents_path
+  local host_agents_global_path host_agents_default_path
   local host_agents_log host_agents_disabled
   local gh_host_config_dir
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
@@ -533,6 +535,8 @@ main() {
   host_agents_enabled=1
   host_agents_source=""
   host_agents_path=""
+  host_agents_global_path="${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md"
+  host_agents_default_path="$(expand_tilde "${OPENCODE_WEB_CONFIG_DIR}/AGENTS.md")"
   host_agents_log=""
   host_agents_disabled=0
 
@@ -697,8 +701,8 @@ main() {
         host_agents_source="env"
         host_agents_path="${OPENCODE_HOST_AGENTS}"
       else
-        host_agents_source="default"
-        host_agents_path="${HOME}/.codex/AGENTS.md"
+        host_agents_source="native"
+        host_agents_path="${host_agents_default_path}"
       fi
     fi
 
@@ -706,25 +710,29 @@ main() {
       die "--agents-file requires a non-empty host path."
     fi
 
-    if [ -n "$host_agents_path" ]; then
+    if [ "$host_agents_source" = "native" ]; then
+      if [ -f "$host_agents_path" ]; then
+        if [ ! -r "$host_agents_path" ]; then
+          die "Host AGENTS.md is not readable at ${host_agents_path}."
+        fi
+        host_agents_log="Using OpenCode global AGENTS.md via config mount: ${host_agents_path}"
+      else
+        debug "Global AGENTS.md not found at ${host_agents_path}; relying on project rules and OpenCode defaults."
+      fi
+    elif [ -n "$host_agents_path" ]; then
       host_agents_path="$(expand_tilde "$host_agents_path")"
       if [ -f "$host_agents_path" ]; then
         if [ ! -r "$host_agents_path" ]; then
           die "Host AGENTS.md is not readable at ${host_agents_path}."
         fi
         host_agents_log="Using host AGENTS.md from ${host_agents_source}: ${host_agents_path}"
-        docker_args+=(-v "${host_agents_path}:/etc/opencode/AGENTS.md:ro")
-        docker_args+=(-e "OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md")
+        docker_args+=(-v "${host_agents_path}:${host_agents_global_path}:ro")
       else
-        if [ "$host_agents_source" = "default" ]; then
-          debug "Default host AGENTS.md not found at ${host_agents_path}; continuing without host mount."
-        else
-          die "Host AGENTS.md not found at ${host_agents_path}."
-        fi
+        die "Host AGENTS.md not found at ${host_agents_path}."
       fi
     fi
   else
-    host_agents_log="Host AGENTS.md mount disabled by --no-host-agents."
+    host_agents_log="Host AGENTS.md override mount disabled by --no-host-agents."
   fi
 
   app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")

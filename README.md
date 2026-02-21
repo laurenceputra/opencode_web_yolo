@@ -68,7 +68,6 @@ Wrapper flags:
 
 Environment variables:
 - `OPENCODE_HOST_AGENTS` (host path for AGENTS.md when `--agents-file` is absent)
-- `OPENCODE_INSTRUCTION_PATH` (in-container path used by the runtime)
 
 Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 
@@ -85,22 +84,21 @@ The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `
 
 ## Instruction File Selection
 
-OpenCode can load an instruction file from the host and mount it read-only into the container.
+OpenCode rules use native discovery:
+- project `AGENTS.md` / `CLAUDE.md` files by directory traversal
+- global `~/.config/opencode/AGENTS.md`
 
-Precedence:
+This wrapper mounts host `~/.config/opencode` to `/home/opencode/.config/opencode`, so host global rules are available by default.
+
+Override precedence:
 1) `--agents-file <host-path>`
 2) `OPENCODE_HOST_AGENTS=<host-path>`
-3) `~/.codex/AGENTS.md` when present
+3) otherwise use `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/AGENTS.md` when present
 
 Mount behavior:
-- The selected file is mounted read-only to `/etc/opencode/AGENTS.md`.
-- `OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md` is set inside the container.
-- Use `--no-host-agents` to opt out.
-
-Runtime resolution:
-- `OPENCODE_INSTRUCTION_PATH` points to the instruction file OpenCode will load.
-- If the path is unreadable, the entrypoint falls back to `/app/AGENTS.md`.
-- If no host file is available and `--no-host-agents` is not set, the default selection is optional (run without host mount).
+- Default global rules come from the config-directory mount.
+- Override files (`--agents-file` / `OPENCODE_HOST_AGENTS`) are mounted read-only to `/home/opencode/.config/opencode/AGENTS.md`.
+- `--no-host-agents` disables only the explicit override mount.
 
 Examples:
 
@@ -219,7 +217,8 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
   - Entrypoint also pins runtime user home resolution to `/home/opencode` for SSH/git consistency.
   - Wrapper prints a warning and recommends least-privilege credentials.
 - Host AGENTS mount:
-  - `--agents-file` and `OPENCODE_HOST_AGENTS` only mount a single file, read-only.
+  - `--agents-file` and `OPENCODE_HOST_AGENTS` only mount a single override file, read-only, to `/home/opencode/.config/opencode/AGENTS.md`.
+  - Without an explicit override, global rules come from the normal config-directory mount (`~/.config/opencode/AGENTS.md`).
   - No other host config (SSH, gh, XDG) is mounted implicitly.
 
 ## Governance Files

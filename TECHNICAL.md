@@ -40,11 +40,10 @@ Mount model:
   - `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.config/opencode` (rw)
   - `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode` (rw)
 - Optional host AGENTS:
-  - Precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `$HOME/.codex/AGENTS.md`.
-  - Mounts a single host file read-only at `/etc/opencode/AGENTS.md`.
-  - Exports `OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md` in the container.
-  - `--no-host-agents` disables the host file mount.
-  - If no default file exists, wrapper continues without the host mount.
+  - Native OpenCode global rules come from `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/AGENTS.md` via the default config-directory mount.
+  - Precedence for explicit overrides: `--agents-file` > `OPENCODE_HOST_AGENTS`.
+  - Override files mount read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
+  - `--no-host-agents` disables explicit override mounts.
 - Runtime env contract:
   - `HOME=${OPENCODE_WEB_YOLO_HOME}`
   - `XDG_CONFIG_HOME=${OPENCODE_WEB_YOLO_HOME}/.config`
@@ -74,7 +73,7 @@ Docker image includes:
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
-- `/app/AGENTS.md` (fallback instruction file)
+- `/app/AGENTS.md` (packaged fallback document)
 
 Entrypoint behavior:
 - maps runtime user/group to host UID/GID.
@@ -83,10 +82,8 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
-- resolves instruction file from `OPENCODE_INSTRUCTION_PATH` (default `/app/AGENTS.md`).
-- does not inject unsupported OpenCode CLI flags for instruction loading; instruction selection is env/path driven.
-- falls back to `/app/AGENTS.md` if the requested instruction path is unreadable.
-- exits with an error when no readable instruction file is found.
+- does not inject unsupported OpenCode CLI flags for instruction loading.
+- relies on OpenCode's native rules discovery (project AGENTS/CLAUDE files and global config-path rules).
 
 ## Proxy Streaming Notes
 
