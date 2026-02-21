@@ -39,6 +39,12 @@ Mount model:
   - `${PWD}` -> `/workspace` (rw)
   - `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.config/opencode` (rw)
   - `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode` (rw)
+- Optional host AGENTS:
+  - Precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `$HOME/.codex/AGENTS.md`.
+  - Mounts a single host file read-only at `/etc/opencode/AGENTS.md`.
+  - Exports `OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md` in the container.
+  - `--no-host-agents` disables the host file mount.
+  - If no default file exists, wrapper continues without the host mount.
 - Runtime env contract:
   - `HOME=${OPENCODE_WEB_YOLO_HOME}`
   - `XDG_CONFIG_HOME=${OPENCODE_WEB_YOLO_HOME}/.config`
@@ -68,6 +74,7 @@ Docker image includes:
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
+- `/app/AGENTS.md` (fallback instruction file)
 
 Entrypoint behavior:
 - maps runtime user/group to host UID/GID.
@@ -76,6 +83,9 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
+- resolves instruction file from `OPENCODE_INSTRUCTION_PATH` (default `/app/AGENTS.md`).
+- falls back to `/app/AGENTS.md` if the requested instruction path is unreadable.
+- exits with an error when no readable instruction file is found.
 
 ## Proxy Streaming Notes
 

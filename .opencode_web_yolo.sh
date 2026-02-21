@@ -60,6 +60,21 @@ version_gt() {
   [ "$left" != "$right" ] && [ "$(printf '%s\n%s\n' "$left" "$right" | sort -V | tail -n 1)" = "$left" ]
 }
 
+expand_tilde() {
+  local path="$1"
+  if [ "$path" = "~" ]; then
+    printf '%s\n' "$HOME"
+    return 0
+  fi
+
+  if [ "${path#\~/}" != "$path" ]; then
+    printf '%s\n' "${HOME}/${path#\~/}"
+    return 0
+  fi
+
+  printf '%s\n' "$path"
+}
+
 resolve_repo_from_origin() {
   local origin url
   if ! command -v git >/dev/null 2>&1; then
@@ -188,6 +203,9 @@ Usage:
 Wrapper flags:
   --pull                 Force docker rebuild/pull behavior.
   --no-pull              Skip default pull-on-start behavior for this run.
+  --agents-file PATH     Mount a host AGENTS.md file read-only.
+  --no-host-agents       Skip mounting host AGENTS.md.
+  --dry-run              Print docker command and exit.
   --detach, -d           Force background mode.
   --foreground, -f       Run attached in current terminal.
   --mount-ssh            Mount host ~/.ssh as read-only (explicit).
@@ -220,6 +238,13 @@ First-time setup:
 
 Preview without launching:
   OPENCODE_WEB_DRY_RUN=1 opencode_web_yolo --verbose
+  opencode_web_yolo --dry-run --verbose
+
+Host instruction file selection:
+  --agents-file PATH            Explicit host AGENTS.md to mount (read-only).
+  OPENCODE_HOST_AGENTS=PATH     Host AGENTS.md when --agents-file is absent.
+  Default: auto-use ~/.codex/AGENTS.md when present.
+  --no-host-agents              Disable host AGENTS.md mount.
 EOF
 }
 
@@ -492,6 +517,8 @@ prepare_runtime_container() {
 
 main() {
   local mode use_gh mount_ssh
+  local host_agents_enabled host_agents_source host_agents_path
+  local host_agents_log host_agents_disabled
   local gh_host_config_dir
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local -a passthrough docker_args app_cmd docker_cmd
@@ -500,6 +527,11 @@ main() {
   use_gh=0
   mount_ssh=0
   passthrough=()
+  host_agents_enabled=1
+  host_agents_source=""
+  host_agents_path=""
+  host_agents_log=""
+  host_agents_disabled=0
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -514,6 +546,27 @@ main() {
       --no-pull)
         OPENCODE_WEB_AUTO_PULL=0
         OPENCODE_WEB_BUILD_PULL=0
+        ;;
+      --agents-file=*)
+        host_agents_enabled=1
+        host_agents_source="flag"
+        host_agents_path="${1#*=}"
+        ;;
+      --agents-file)
+        shift
+        [ "$#" -gt 0 ] || die "--agents-file requires a host path."
+        host_agents_enabled=1
+        host_agents_source="flag"
+        host_agents_path="$1"
+        ;;
+      --no-host-agents)
+        host_agents_enabled=0
+        host_agents_source="disabled"
+        host_agents_path=""
+        host_agents_disabled=1
+        ;;
+      --dry-run)
+        OPENCODE_WEB_DRY_RUN=1
         ;;
       --detach|-d)
         OPENCODE_WEB_RUN_DETACHED=1
@@ -635,6 +688,42 @@ main() {
     fi
   fi
 
+  if [ "$host_agents_enabled" -eq 1 ]; then
+    if [ -z "$host_agents_source" ]; then
+      if [ -n "${OPENCODE_HOST_AGENTS:-}" ]; then
+        host_agents_source="env"
+        host_agents_path="${OPENCODE_HOST_AGENTS}"
+      else
+        host_agents_source="default"
+        host_agents_path="${HOME}/.codex/AGENTS.md"
+      fi
+    fi
+
+    if [ "$host_agents_source" = "flag" ] && [ -z "$host_agents_path" ]; then
+      die "--agents-file requires a non-empty host path."
+    fi
+
+    if [ -n "$host_agents_path" ]; then
+      host_agents_path="$(expand_tilde "$host_agents_path")"
+      if [ -f "$host_agents_path" ]; then
+        if [ ! -r "$host_agents_path" ]; then
+          die "Host AGENTS.md is not readable at ${host_agents_path}."
+        fi
+        host_agents_log="Using host AGENTS.md from ${host_agents_source}: ${host_agents_path}"
+        docker_args+=(-v "${host_agents_path}:/etc/opencode/AGENTS.md:ro")
+        docker_args+=(-e "OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md")
+      else
+        if [ "$host_agents_source" = "default" ]; then
+          debug "Default host AGENTS.md not found at ${host_agents_path}; continuing without host mount."
+        else
+          die "Host AGENTS.md not found at ${host_agents_path}."
+        fi
+      fi
+    fi
+  else
+    host_agents_log="Host AGENTS.md mount disabled by --no-host-agents."
+  fi
+
   app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
   app_cmd+=("${passthrough[@]}")
 
@@ -661,11 +750,21 @@ main() {
     printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
     printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
+    printf '%s\n' "host_agents_source=${host_agents_source}"
+    printf '%s\n' "host_agents_path=${host_agents_path}"
+    printf '%s\n' "host_agents_disabled=${host_agents_disabled}"
     printf '%s\n' "docker_command:"
     printf '  '
     printf '%q ' "${docker_cmd[@]}"
     printf '\n'
+    if [ -n "$host_agents_log" ]; then
+      printf '%s\n' "${host_agents_log}"
+    fi
     return 0
+  fi
+
+  if [ -n "$host_agents_log" ]; then
+    log "${host_agents_log}"
   fi
 
   "${docker_cmd[@]}"

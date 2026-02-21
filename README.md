@@ -52,6 +52,9 @@ opencode_web_yolo [wrapper_flags] [-- opencode_web_args...]
 Wrapper flags:
 - `--pull`
 - `--no-pull`
+- `--agents-file <host-path>`
+- `--no-host-agents`
+- `--dry-run`
 - `--detach`, `-d`
 - `--foreground`, `-f`
 - `--mount-ssh`
@@ -62,7 +65,11 @@ Wrapper flags:
 - `--version`, `version`
 - `--verbose`, `-v`
 
-Use `OPENCODE_WEB_DRY_RUN=1` to preview the exact docker command and effective settings.
+Environment variables:
+- `OPENCODE_HOST_AGENTS` (host path for AGENTS.md when `--agents-file` is absent)
+- `OPENCODE_INSTRUCTION_PATH` (in-container path used by the runtime)
+
+Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
 
@@ -74,6 +81,43 @@ Use `OPENCODE_WEB_DRY_RUN=1` to preview the exact docker command and effective s
 
 Provider auth/session state (for example OpenAI and GitHub Copilot links) persists across restarts from the OpenCode data path.
 The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`) to `/home/opencode` paths so app writes always land on mounted host directories.
+
+## Instruction File Selection
+
+OpenCode can load an instruction file from the host and mount it read-only into the container.
+
+Precedence:
+1) `--agents-file <host-path>`
+2) `OPENCODE_HOST_AGENTS=<host-path>`
+3) `~/.codex/AGENTS.md` when present
+
+Mount behavior:
+- The selected file is mounted read-only to `/etc/opencode/AGENTS.md`.
+- `OPENCODE_INSTRUCTION_PATH=/etc/opencode/AGENTS.md` is set inside the container.
+- Use `--no-host-agents` to opt out.
+
+Runtime resolution:
+- `OPENCODE_INSTRUCTION_PATH` points to the instruction file OpenCode will load.
+- If the path is unreadable, the entrypoint falls back to `/app/AGENTS.md`.
+- If no host file is available and `--no-host-agents` is not set, the default selection is optional (run without host mount).
+
+Examples:
+
+```bash
+opencode_web_yolo --agents-file /path/to/my/AGENTS.md
+```
+
+```bash
+OPENCODE_HOST_AGENTS=/ci/path/AGENTS.md opencode_web_yolo
+```
+
+```bash
+opencode_web_yolo --no-host-agents
+```
+
+```bash
+opencode_web_yolo --dry-run
+```
 
 ## Operational One-Liners
 
@@ -173,6 +217,9 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
   - Sets `GIT_CONFIG_GLOBAL=/home/opencode/.gitconfig` so git clients resolve the mounted config consistently.
   - Entrypoint also pins runtime user home resolution to `/home/opencode` for SSH/git consistency.
   - Wrapper prints a warning and recommends least-privilege credentials.
+- Host AGENTS mount:
+  - `--agents-file` and `OPENCODE_HOST_AGENTS` only mount a single file, read-only.
+  - No other host config (SSH, gh, XDG) is mounted implicitly.
 
 ## Governance Files
 
@@ -181,7 +228,7 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
 ## Troubleshooting
 
 - Run `opencode_web_yolo health` for Docker/image/auth diagnostics.
-- Use `OPENCODE_WEB_DRY_RUN=1` to verify port bind, env, and mount behavior.
+- Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
 - If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/pty` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules).
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.

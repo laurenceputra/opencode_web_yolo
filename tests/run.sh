@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 "${ROOT_DIR}/tests/test_dry_run.sh"
+"${ROOT_DIR}/tests/wrapper-dryrun.sh"
 "${ROOT_DIR}/tests/test_launch_mode_flags.sh"
 "${ROOT_DIR}/tests/test_health.sh"
 "${ROOT_DIR}/tests/test_entrypoint_auth_guard.sh"

@@ -9,6 +9,7 @@ OPENCODE_WEB_YOLO_CLEANUP="${OPENCODE_WEB_YOLO_CLEANUP:-1}"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${OPENCODE_WEB_YOLO_HOME}/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${OPENCODE_WEB_YOLO_HOME}/.local/share}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-${XDG_DATA_HOME}/opencode/state}"
+INSTRUCTIONS="${OPENCODE_INSTRUCTION_PATH:-/app/AGENTS.md}"
 
 if [ -z "${OPENCODE_SERVER_PASSWORD:-}" ]; then
   printf '%s\n' "[opencode_web_yolo] ERROR: OPENCODE_SERVER_PASSWORD must be set and non-empty." >&2
@@ -67,4 +68,25 @@ export HOME="${OPENCODE_WEB_YOLO_HOME}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME}"
 export XDG_DATA_HOME="${XDG_DATA_HOME}"
 export XDG_STATE_HOME="${XDG_STATE_HOME}"
-exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_STATE_HOME="${XDG_STATE_HOME}" gosu "${runtime_user}" "$@"
+
+if [ -r "${INSTRUCTIONS}" ]; then
+  printf '%s\n' "[opencode_web_yolo] Loading instruction set from ${INSTRUCTIONS}"
+else
+  if [ "${INSTRUCTIONS}" != "/app/AGENTS.md" ] && [ -r "/app/AGENTS.md" ]; then
+    printf '%s\n' "[opencode_web_yolo] WARNING: Instruction file not readable at ${INSTRUCTIONS}; falling back to /app/AGENTS.md"
+    INSTRUCTIONS="/app/AGENTS.md"
+    printf '%s\n' "[opencode_web_yolo] Loading instruction set from ${INSTRUCTIONS}"
+  else
+    printf '%s\n' "[opencode_web_yolo] ERROR: No readable instruction file found at ${INSTRUCTIONS} or /app/AGENTS.md" >&2
+    exit 1
+  fi
+fi
+
+export OPENCODE_INSTRUCTION_PATH="${INSTRUCTIONS}"
+
+if [ "${1:-}" = "opencode" ] && [ "${2:-}" = "web" ]; then
+  shift 2
+  set -- opencode web --instructions "${INSTRUCTIONS}" "$@"
+fi
+
+exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_STATE_HOME="${XDG_STATE_HOME}" OPENCODE_INSTRUCTION_PATH="${OPENCODE_INSTRUCTION_PATH}" gosu "${runtime_user}" "$@"

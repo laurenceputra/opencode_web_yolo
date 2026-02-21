@@ -29,9 +29,11 @@ RUN if [ "${OPENCODE_VERSION}" = "latest" ]; then \
       npm install -g "${OPENCODE_NPM_PACKAGE}@${OPENCODE_VERSION}" ; \
     fi
 
-RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" \
+RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version
+
+COPY AGENTS.md /app/AGENTS.md
 
 COPY .opencode_web_yolo_entrypoint.sh /usr/local/bin/opencode_web_yolo_entrypoint.sh
 RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh
