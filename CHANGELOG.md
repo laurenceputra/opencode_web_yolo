@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.5] - 2026-03-03
+
+- Fixed wrapper rebuild behavior to pass resolved OpenCode npm version into Docker build args so `latest` updates invalidate cache correctly.
+- Added regression coverage that asserts rebuilds use the resolved `OPENCODE_VERSION` when image/runtime version drift is detected.
+
 ## [0.1.4] - 2026-02-21
 
 - Switched the default runtime base image from `node:20-slim` to `node:22-slim` to track current Node.js LTS.

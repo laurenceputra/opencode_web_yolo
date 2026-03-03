@@ -400,11 +400,14 @@ resolve_expected_opencode_version() {
 }
 
 build_image() {
-  local build_opencode_version
+  local requested_opencode_version build_opencode_version
   local -a build_cmd
 
+  requested_opencode_version="${1:-}"
   build_opencode_version="latest"
-  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
+  if [ -n "$requested_opencode_version" ]; then
+    build_opencode_version="$requested_opencode_version"
+  elif [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
     build_opencode_version="${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
   fi
 
@@ -469,7 +472,7 @@ ensure_image() {
   for reason in "${reasons[@]}"; do
     log "  - ${reason}"
   done
-  build_image
+  build_image "$expected_opencode_version"
 }
 
 require_password() {
