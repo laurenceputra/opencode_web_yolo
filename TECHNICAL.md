@@ -101,6 +101,8 @@ Entrypoint behavior:
 
 On run, unless disabled:
 - wrapper checks remote `VERSION` from `${OPENCODE_WEB_YOLO_REPO}` and `${OPENCODE_WEB_YOLO_BRANCH}`.
+  - default repo: `laurenceputra/opencode_web_yolo`
+  - default branch: `main`
 - if remote version is newer, managed files are downloaded, replaced, and wrapper re-execs with original args.
 
 Update can be disabled with:

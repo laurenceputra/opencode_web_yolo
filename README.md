@@ -68,6 +68,8 @@ Wrapper flags:
 
 Environment variables:
 - `OPENCODE_HOST_AGENTS` (host instruction-file path when `--agents-file` is absent)
+- `OPENCODE_WEB_YOLO_REPO` (self-update repo, default: `laurenceputra/opencode_web_yolo`)
+- `OPENCODE_WEB_YOLO_BRANCH` (self-update branch, default: `main`)
 
 Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 
