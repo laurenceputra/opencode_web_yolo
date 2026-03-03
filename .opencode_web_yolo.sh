@@ -281,7 +281,7 @@ export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 # export OPENCODE_SERVER_USERNAME=opencode
 # export OPENCODE_WEB_CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/opencode
 # export OPENCODE_WEB_DATA_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/opencode
-# export OPENCODE_WEB_YOLO_REPO=owner/repo
+# export OPENCODE_WEB_YOLO_REPO=laurenceputra/opencode_web_yolo
 # export OPENCODE_WEB_YOLO_BRANCH=main
 EOF
   log "Wrote ${config_file}."
