@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.6] - 2026-03-03
+
+- Defaulted `OPENCODE_WEB_YOLO_REPO` to `laurenceputra/opencode_web_yolo` so managed installs can resolve remote version checks without requiring manual repo configuration.
+- Updated wrapper-generated config guidance and docs to reflect the default self-update repo and branch behavior.
+
 ## [0.1.5] - 2026-03-03
 
 - Fixed wrapper rebuild behavior to pass resolved OpenCode npm version into Docker build args so `latest` updates invalidate cache correctly.
