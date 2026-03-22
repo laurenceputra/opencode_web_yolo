@@ -66,15 +66,49 @@ Wrapper flags:
 - `--version`, `version`
 - `--verbose`, `-v`
 
-Environment variables:
+Additional environment variable:
 - `OPENCODE_HOST_AGENTS` (host instruction-file path when `--agents-file` is absent)
-- `OPENCODE_WEB_YOLO_REPO` (self-update repo, default: `laurenceputra/opencode_web_yolo`)
-- `OPENCODE_WEB_YOLO_BRANCH` (self-update branch, default: `main`)
 
 Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
 If a container with the configured name already exists, wrapper launch replaces it (stops if running, then removes, then starts fresh).
+
+## Configuration
+
+Run `opencode_web_yolo config` to generate a sample config file at `~/.opencode_web_yolo/config`.
+The wrapper sources that file on startup, so it is the right place for persistent operator defaults.
+For one-off runs you can still prefix the command with environment variables in your shell, but if the same variable is also exported in the config file, the config-file value wins because it is loaded during wrapper startup.
+
+Common workflow:
+
+```bash
+opencode_web_yolo config
+$EDITOR ~/.opencode_web_yolo/config
+opencode_web_yolo
+```
+
+Operator-facing settings:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENCODE_SERVER_PASSWORD` | none, required | Required non-empty password for OpenCode Web. Startup fails if it is missing or empty. |
+| `OPENCODE_SERVER_USERNAME` | `opencode` | Login username paired with `OPENCODE_SERVER_PASSWORD`. |
+| `OPENCODE_WEB_PORT` | `4096` | Host/container port used for `opencode web` and the local Docker publish mapping. |
+| `OPENCODE_WEB_HOSTNAME` | `0.0.0.0` | Hostname passed to `opencode web` inside the container. |
+| `OPENCODE_WEB_CONTAINER_NAME` | `opencode_web_yolo` | Docker container name used for launch, replacement, and diagnostics. |
+| `OPENCODE_WEB_RESTART_POLICY` | `unless-stopped` | Docker restart policy applied to the container. |
+| `OPENCODE_WEB_RUN_DETACHED` | `1` | Launch mode default. Use `1` for background mode or `0` for attached runs unless overridden by flags. |
+| `OPENCODE_WEB_AUTO_PULL` | `1` | Pull/rebuild behavior default. Use `0` to disable pull-on-start unless `--pull` is passed. |
+| `OPENCODE_WEB_YOLO_REPO` | `laurenceputra/opencode_web_yolo` | GitHub repo used for wrapper self-update checks and bootstrap downloads. |
+| `OPENCODE_WEB_YOLO_BRANCH` | `main` | Branch used with `OPENCODE_WEB_YOLO_REPO` for update checks and bootstrap downloads. |
+| `OPENCODE_WEB_SKIP_UPDATE_CHECK` | `0` | Set to `1` to skip the wrapper's remote `VERSION` check and self-update flow. |
+| `OPENCODE_WEB_SKIP_VERSION_CHECK` | `0` | Set to `1` to skip OpenCode version drift checks when deciding whether to rebuild the image. |
+| `OPENCODE_WEB_CONFIG_DIR` | `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` | Host OpenCode config directory mounted into the container for persistent config and rules. |
+| `OPENCODE_WEB_DATA_DIR` | `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` | Host OpenCode data directory mounted into the container for persistent sessions, provider auth, and state. |
+| `OPENCODE_WEB_YOLO_IMAGE` | `opencode_web_yolo:latest` | Docker image tag the wrapper builds and runs. |
+| `OPENCODE_WEB_BASE_IMAGE` | `node:22-slim` | Base image used when rebuilding the runtime image. |
+| `OPENCODE_WEB_NPM_PACKAGE` | `opencode-ai` | npm package installed in the runtime image for the OpenCode CLI. |
 
 ## Persistence Paths
 
