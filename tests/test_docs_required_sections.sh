@@ -9,6 +9,7 @@ readme="$(cat "${ROOT_DIR}/README.md")"
 
 assert_contains "$readme" "## Quickstart"
 assert_contains "$readme" "## Authentication Requirement"
+assert_contains "$readme" "## Configuration"
 assert_contains "$readme" "## Persistence Paths"
 assert_contains "$readme" "## Reverse Proxy (Nginx)"
 assert_contains "$readme" "## Reverse Proxy (Apache)"
