@@ -27,6 +27,8 @@ jobs:
           bash -n tests/test_entrypoint_home_pin.sh
           bash -n tests/test_docs_apache_endpoints.sh
           bash -n tests/test_help.sh
+          bash -n tests/test_version_command.sh
+          bash -n tests/test_self_update.sh
           bash -n tests/test_auth_required.sh
           bash -n tests/test_sensitive_mounts.sh
           bash -n tests/test_spec_ignore.sh
@@ -52,6 +54,8 @@ jobs:
           shellcheck -x tests/test_entrypoint_home_pin.sh
           shellcheck -x tests/test_docs_apache_endpoints.sh
           shellcheck -x tests/test_help.sh
+          shellcheck -x tests/test_version_command.sh
+          shellcheck -x tests/test_self_update.sh
           shellcheck -x tests/test_auth_required.sh
           shellcheck -x tests/test_sensitive_mounts.sh
           shellcheck -x tests/test_spec_ignore.sh
