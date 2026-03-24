@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.7] - 2026-03-24
+
+- Added the Roadmap entropy detector quality gate via `check-roadmap` / `roadmap-entropy` to detect roadmap scope creep and drift across the tracked spec, wrapper help, docs, tests, and CI wiring.
+- Added the tracked spec at `docs/roadmap-entropy-detector.md` plus deterministic tests and CI coverage for the detector contract.
+
 ## [0.1.6] - 2026-03-03
 
 - Defaulted `OPENCODE_WEB_YOLO_REPO` to `laurenceputra/opencode_web_yolo` so managed installs can resolve remote version checks without requiring manual repo configuration.

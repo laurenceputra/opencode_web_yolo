@@ -125,9 +125,17 @@ Controls:
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
 - `OPENCODE_WEB_SKIP_VERSION_CHECK=1`
 
+## Roadmap Entropy Detector
+
+- Repo-local read-only quality gate exposed as `check-roadmap` and `roadmap-entropy`.
+- Source of truth: `docs/roadmap-entropy-detector.md`.
+- Validates required spec sections plus explicit drift markers across `.opencode_web_yolo.sh`, `README.md`, `TECHNICAL.md`, tests, and `.github/workflows/ci.yml`.
+- Runs without Docker and without auth, but requires a repository checkout containing the tracked files under watch.
+
 ## Release Checklist
 
 - Update `VERSION` and `CHANGELOG.md` together.
+- Run `opencode_web_yolo check-roadmap`.
 - Run `bash tests/run.sh`.
 - Run `bash -n` and `shellcheck` for touched shell scripts.
 - Build the runtime image and verify required binaries (`gh`, `git`, `ssh`).
@@ -143,5 +151,6 @@ Tests and CI assert:
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
 - health output includes persistence/lifecycle settings.
 - health output includes browser-vs-server persistence scope visibility.
+- roadmap entropy spec/help/docs/test/CI references remain aligned via `opencode_web_yolo check-roadmap` and `tests/test_roadmap_entropy.sh`.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
 - `VERSION` semver format and runtime-file/version drift guard.

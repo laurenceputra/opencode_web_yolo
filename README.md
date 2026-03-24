@@ -61,6 +61,7 @@ Wrapper flags:
 - `--mount-ssh`
 - `-gh`, `--gh`
 - `health`, `--health`, `diagnostics`
+- `check-roadmap`, `roadmap-entropy`
 - `config`
 - `--help`, `-h`, `help`
 - `--version`, `version`
@@ -254,6 +255,18 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
   - Wrapper resolves one file using the documented fallback chain and mounts it read-only to `/home/opencode/.config/opencode/AGENTS.md`.
   - `--agents-file` and `OPENCODE_HOST_AGENTS` override all defaults.
   - No other host config (SSH, gh, XDG) is mounted implicitly.
+
+## Roadmap Entropy Detector
+
+Repo maintainers can run `opencode_web_yolo check-roadmap` (or `opencode_web_yolo roadmap-entropy`) from a repository checkout to verify that the tracked spec at `docs/roadmap-entropy-detector.md` still matches the approved scope, wrapper help, implementation contracts, tests, and CI wiring. It is a read-only quality gate: it does not build Docker images, start containers, or rewrite files.
+
+Run it locally before opening a PR:
+
+```bash
+opencode_web_yolo check-roadmap
+```
+
+CI exercises the same contract through `tests/test_roadmap_entropy.sh` in `bash tests/run.sh`, while shell syntax and shellcheck also cover the new test file.
 
 ## Governance Files
 
