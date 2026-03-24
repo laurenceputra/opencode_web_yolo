@@ -14,6 +14,7 @@ assert_contains "$readme" "## Persistence Paths"
 assert_contains "$readme" "## Reverse Proxy (Nginx)"
 assert_contains "$readme" "## Reverse Proxy (Apache)"
 assert_contains "$readme" "## Security Notes"
+assert_contains "$readme" "## Roadmap Entropy Detector"
 assert_contains "$readme" "## Troubleshooting"
 
 printf '%s\n' "PASS: README required sections"

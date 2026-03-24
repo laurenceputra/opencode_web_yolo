@@ -212,6 +212,8 @@ Wrapper flags:
   -gh, --gh              Mount authenticated host gh config as read-only.
   health, --health       Show diagnostics (no server start).
   diagnostics            Alias for health.
+  check-roadmap, roadmap-entropy
+                         Check roadmap/spec drift (repo checkout, no Docker).
   config                 Generate sample config file at:
                          ${OPENCODE_WEB_CONFIG_FILE}
   --version, version     Print wrapper version.
@@ -378,6 +380,134 @@ show_health() {
   fi
 
   return "$status"
+}
+
+resolve_roadmap_repo_root() {
+  local candidate
+
+  if command -v git >/dev/null 2>&1; then
+    if candidate="$(git rev-parse --show-toplevel 2>/dev/null)"       && [ -f "${candidate}/TECHNICAL.md" ]       && [ -f "${candidate}/README.md" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+
+    if candidate="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null)"       && [ -f "${candidate}/TECHNICAL.md" ]       && [ -f "${candidate}/README.md" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  fi
+
+  if [ -f "${SCRIPT_DIR}/TECHNICAL.md" ] && [ -f "${SCRIPT_DIR}/README.md" ]; then
+    printf '%s\n' "${SCRIPT_DIR}"
+    return 0
+  fi
+
+  die "Roadmap entropy checks must be run from a repository checkout containing README.md and TECHNICAL.md."
+}
+
+run_roadmap_entropy() {
+  local repo_root spec_path spec_rel_path section line file_rel entry marker_path marker_text status
+  local total_checks=0
+  local -a errors required_sections spec_files spec_matches
+
+  repo_root="$(resolve_roadmap_repo_root)"
+  spec_rel_path="docs/roadmap-entropy-detector.md"
+  spec_path="${repo_root}/${spec_rel_path}"
+  errors=()
+  required_sections=(
+    "## Objective"
+    "## Non-negotiables"
+    "## Approved Scope"
+    "## Files Under Watch"
+    "## Test and Validation Plan"
+    "## Acceptance Criteria"
+    "## Out of Scope"
+    "## Open Decisions and Spec Gaps"
+    "## Drift Markers"
+  )
+  spec_files=()
+  spec_matches=()
+
+  printf '%s\n' "opencode_web_yolo roadmap entropy report"
+  printf '%s\n' "  repo_root=${repo_root}"
+  printf '%s\n' "  spec=${spec_rel_path}"
+
+  total_checks=$((total_checks + 1))
+  if [ ! -f "${spec_path}" ]; then
+    errors+=("missing tracked spec at ${spec_rel_path}")
+  elif [ ! -r "${spec_path}" ]; then
+    errors+=("tracked spec is not readable at ${spec_rel_path}")
+  fi
+
+  if [ -r "${spec_path}" ]; then
+    for section in "${required_sections[@]}"; do
+      total_checks=$((total_checks + 1))
+      if ! grep -Fx -- "$section" "${spec_path}" >/dev/null 2>&1; then
+        errors+=("missing spec section '${section}'")
+      fi
+    done
+
+    while IFS= read -r line; do
+      case "$line" in
+        FILE\|*)
+          spec_files+=("${line#FILE|}")
+          ;;
+        MATCH\|*)
+          spec_matches+=("${line#MATCH|}")
+          ;;
+      esac
+    done <"${spec_path}"
+  fi
+
+  total_checks=$((total_checks + 1))
+  if [ "${#spec_files[@]}" -eq 0 ]; then
+    errors+=("spec drift markers did not declare any FILE entries")
+  fi
+
+  total_checks=$((total_checks + 1))
+  if [ "${#spec_matches[@]}" -eq 0 ]; then
+    errors+=("spec drift markers did not declare any MATCH entries")
+  fi
+
+  for file_rel in "${spec_files[@]}"; do
+    total_checks=$((total_checks + 1))
+    if [ ! -e "${repo_root}"/"${file_rel}" ]; then
+      errors+=("missing watched file '${file_rel}'")
+    fi
+  done
+
+  for entry in "${spec_matches[@]}"; do
+    marker_path="${entry%%|*}"
+    marker_text="${entry#*|}"
+    total_checks=$((total_checks + 1))
+    if [ ! -f "${repo_root}"/"${marker_path}" ]; then
+      errors+=("cannot validate marker '${marker_path} :: ${marker_text}' because the file is missing")
+      continue
+    fi
+
+    if ! grep -F -- "$marker_text" "${repo_root}"/"${marker_path}" >/dev/null 2>&1; then
+      errors+=("expected '${marker_path}' to contain '${marker_text}'")
+    fi
+  done
+
+  if [ "${#errors[@]}" -eq 0 ]; then
+    status="ok"
+  else
+    status="drift"
+  fi
+
+  printf '%s\n' "  status=${status}"
+  printf '%s\n' "  checks=${total_checks}"
+
+  if [ "$status" = "ok" ]; then
+    printf '%s\n' "PASS: roadmap entropy contract is aligned"
+    return 0
+  fi
+
+  for entry in "${errors[@]}"; do
+    printf '%s\n' "FAIL: ${entry}" >&2
+  done
+  return 1
 }
 
 resolve_expected_opencode_version() {
@@ -606,6 +736,9 @@ main() {
       health|--health|diagnostics)
         mode="health"
         ;;
+      check-roadmap|roadmap-entropy)
+        mode="roadmap_entropy"
+        ;;
       config)
         mode="config"
         ;;
@@ -641,6 +774,10 @@ main() {
       ;;
     health)
       show_health
+      return $?
+      ;;
+    roadmap_entropy)
+      run_roadmap_entropy
       return $?
       ;;
   esac

@@ -12,6 +12,7 @@ assert_contains "$technical" "## Security Model"
 assert_contains "$technical" "## Proxy Streaming Notes"
 assert_contains "$technical" "## Update and Re-exec"
 assert_contains "$technical" "## Rebuild Decision Logic"
+assert_contains "$technical" "## Roadmap Entropy Detector"
 assert_contains "$technical" "## Test and CI Strategy"
 assert_contains "$technical" "## Release Checklist"
 
