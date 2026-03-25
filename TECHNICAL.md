@@ -43,6 +43,7 @@ Mount model:
 - Rehearsal mounts:
   - `rehearse-migrations` clones `${OPENCODE_WEB_CONFIG_DIR}` and `${OPENCODE_WEB_DATA_DIR}` into `mktemp -d` scratch directories and mounts those scratch copies instead of the real persistence paths.
   - The wrapper must not create missing host config/data directories when rehearsal mode is selected.
+  - When host instruction loading is enabled, the selected AGENTS source is copied into the scratch config tree before launch instead of being bind-mounted from the host.
 - Optional host AGENTS:
   - Selection precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `~/.config/opencode/AGENTS.md` > `~/.codex/AGENTS.md` > `~/.copilot/copilot-instructions.md` > `~/.claude/CLAUDE.md`.
   - The selected host file mounts read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
@@ -71,11 +72,13 @@ Mount model:
 - Password/auth requirement is unchanged: `OPENCODE_SERVER_PASSWORD` must be set and non-empty.
 - Local-only publish contract is unchanged: `-p 127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`.
 - Rehearsal mode must not mount the real `${OPENCODE_WEB_CONFIG_DIR}` or `${OPENCODE_WEB_DATA_DIR}` into the container.
+- Rehearsal mode must not bind-mount the selected host AGENTS file directly; it must stage that file inside the scratch config copy.
 - Rehearsal mode uses an ephemeral `--rm` container named `${OPENCODE_WEB_CONTAINER_NAME}-rehearsal-<pid>` and does not stop/remove the main runtime container.
 - Dry-run/verbose output must surface:
   - rehearsal mode activation
   - source host config/data paths
   - scratch config/data mount paths
+  - scratch-staged AGENTS path when a host instruction file is selected
   - cleanup behavior (`wrapper-exit` for foreground/dry-run, deferred until detached container exit otherwise)
 - Cleanup:
   - foreground and dry-run rehearsals remove the scratch root via wrapper exit trap

@@ -27,6 +27,7 @@ REHEARSAL_SOURCE_CONFIG_DIR=""
 REHEARSAL_SOURCE_DATA_DIR=""
 REHEARSAL_MOUNT_CONFIG_DIR=""
 REHEARSAL_MOUNT_DATA_DIR=""
+REHEARSAL_HOST_AGENTS_PATH=""
 RUNTIME_HOME=""
 RUNTIME_XDG_CONFIG=""
 RUNTIME_XDG_DATA=""
@@ -542,6 +543,14 @@ copy_directory_tree() {
   fi
 }
 
+copy_host_agents_into_rehearsal_config() {
+  local source_file="$1"
+
+  REHEARSAL_HOST_AGENTS_PATH="${REHEARSAL_MOUNT_CONFIG_DIR}/AGENTS.md"
+  mkdir -p "$(dirname "${REHEARSAL_HOST_AGENTS_PATH}")"
+  cp "${source_file}" "${REHEARSAL_HOST_AGENTS_PATH}"
+}
+
 resolve_runtime_paths() {
   RUNTIME_HOME="${OPENCODE_WEB_YOLO_HOME}"
   RUNTIME_XDG_CONFIG="${OPENCODE_WEB_YOLO_HOME}/.config"
@@ -569,6 +578,7 @@ prepare_rehearsal_mounts() {
   REHEARSAL_SCRATCH_ROOT="$(mktemp -d)"
   REHEARSAL_MOUNT_CONFIG_DIR="${REHEARSAL_SCRATCH_ROOT}/config"
   REHEARSAL_MOUNT_DATA_DIR="${REHEARSAL_SCRATCH_ROOT}/data"
+  REHEARSAL_HOST_AGENTS_PATH=""
 
   trap cleanup_rehearsal_scratch EXIT
   copy_directory_tree "${REHEARSAL_SOURCE_CONFIG_DIR}" "${REHEARSAL_MOUNT_CONFIG_DIR}"
@@ -688,7 +698,7 @@ main() {
   local host_agents_enabled host_agents_source host_agents_path
   local host_agents_container_path host_agents_opencode_path
   local host_agents_codex_path host_agents_copilot_path host_agents_claude_path
-  local host_agents_log host_agents_disabled
+  local host_agents_log host_agents_disabled host_agents_delivery
   local gh_host_config_dir
   local -a passthrough docker_cmd
 
@@ -706,6 +716,7 @@ main() {
   host_agents_claude_path="$(expand_tilde "${HOME}/.claude/CLAUDE.md")"
   host_agents_log=""
   host_agents_disabled=0
+  host_agents_delivery="none"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -879,7 +890,14 @@ main() {
           die "Host instruction file is not readable at ${host_agents_path}."
         fi
         host_agents_log="Using host instruction file from ${host_agents_source}: ${host_agents_path}"
-        DOCKER_ARGS+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
+        if [ "$mode" = "rehearse_migrations" ]; then
+          copy_host_agents_into_rehearsal_config "${host_agents_path}"
+          host_agents_delivery="scratch-copy"
+          host_agents_log="${host_agents_log} (copied into rehearsal scratch config at ${REHEARSAL_HOST_AGENTS_PATH})"
+        else
+          host_agents_delivery="bind-mount"
+          DOCKER_ARGS+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
+        fi
       else
         if [ "$host_agents_source" = "flag" ] || [ "$host_agents_source" = "env" ]; then
           die "Host instruction file not found at ${host_agents_path}."
@@ -889,6 +907,7 @@ main() {
     fi
   else
     host_agents_log="Host instruction file mount disabled by --no-host-agents."
+    host_agents_delivery="disabled"
   fi
 
   build_app_command "${passthrough[@]}"
@@ -922,11 +941,15 @@ main() {
     printf '%s\n' "host_agents_path=${host_agents_path}"
     printf '%s\n' "host_agents_disabled=${host_agents_disabled}"
     if [ "$mode" = "rehearse_migrations" ]; then
+      printf '%s\n' "host_agents_delivery=${host_agents_delivery}"
       printf '%s\n' "rehearsal_mode=1"
       printf '%s\n' "rehearsal_source_config_dir=${REHEARSAL_SOURCE_CONFIG_DIR}"
       printf '%s\n' "rehearsal_source_data_dir=${REHEARSAL_SOURCE_DATA_DIR}"
       printf '%s\n' "rehearsal_mount_config_dir=${REHEARSAL_MOUNT_CONFIG_DIR}"
       printf '%s\n' "rehearsal_mount_data_dir=${REHEARSAL_MOUNT_DATA_DIR}"
+      if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
+        printf '%s\n' "rehearsal_host_agents_path=${REHEARSAL_HOST_AGENTS_PATH}"
+      fi
       printf '%s\n' "rehearsal_cleanup=$(if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ] && is_true "${OPENCODE_WEB_RUN_DETACHED}"; then printf '%s' "after-container-exit"; else printf '%s' "wrapper-exit"; fi)"
     fi
     printf '%s\n' "docker_command:"
@@ -949,6 +972,9 @@ main() {
     log "  source_data=${REHEARSAL_SOURCE_DATA_DIR}"
     log "  scratch_config=${REHEARSAL_MOUNT_CONFIG_DIR}"
     log "  scratch_data=${REHEARSAL_MOUNT_DATA_DIR}"
+    if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
+      log "  scratch_agents=${REHEARSAL_HOST_AGENTS_PATH}"
+    fi
     if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ]; then
       log "  container_name=${EFFECTIVE_CONTAINER_NAME} (ephemeral)"
     fi

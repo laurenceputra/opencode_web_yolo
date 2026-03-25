@@ -85,7 +85,8 @@ If a container with the configured name already exists, wrapper launch replaces 
 
 - The real persistence directories are not mounted in rehearsal mode.
 - Authentication is still mandatory and the localhost-only publish stays `127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`.
-- Host AGENTS selection, `-gh`, and `--mount-ssh` keep their normal precedence and warning behavior.
+- Host AGENTS selection keeps the normal precedence, but the selected file is copied into the rehearsal scratch config tree instead of being bind-mounted from the host.
+- `-gh` and `--mount-ssh` keep their normal validation and warning behavior.
 - Rehearsal runs use an ephemeral `--rm` container named `${OPENCODE_WEB_CONTAINER_NAME}-rehearsal-<pid>` so the main runtime container is left alone.
 - Dry-run output includes `rehearsal_source_*` and `rehearsal_mount_*` lines so operators can verify isolation before launch.
 - Foreground rehearsals clean scratch directories when the wrapper exits. Detached rehearsals clean them after the temporary container stops and auto-removes.
@@ -120,6 +121,7 @@ Mount behavior:
 - The selected file is mounted read-only to `/home/opencode/.config/opencode/AGENTS.md`.
 - This normalizes non-OpenCode filenames (Codex/Copilot/Claude conventions) to OpenCode's global rule path.
 - `--no-host-agents` disables this selected-file mount.
+- In `rehearse-migrations`, the selected file is staged into the scratch config copy at `/home/opencode/.config/opencode/AGENTS.md` so the real host persistence paths remain unmounted.
 
 Examples:
 

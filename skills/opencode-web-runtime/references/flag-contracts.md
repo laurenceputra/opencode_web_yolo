@@ -40,6 +40,7 @@ Use this file when adding or changing wrapper CLI behavior.
 - Rehearsal dry-run also includes:
   - source host config/data paths
   - scratch config/data mount paths
+  - scratch-staged AGENTS path when host instruction loading is active
   - proof that the real persistence paths are not mounted
 - Unknown flags are either passed through or rejected intentionally with clear messaging.
 - Instruction loading must not add unsupported app CLI flags; rely on OpenCode native project/global rules discovery and mounted config paths.
