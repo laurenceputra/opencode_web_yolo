@@ -22,6 +22,23 @@ if [ -f "$WRAPPER_VERSION_FILE" ]; then
 fi
 
 VERBOSE="${OPENCODE_WEB_VERBOSE}"
+REHEARSAL_SCRATCH_ROOT=""
+REHEARSAL_SOURCE_CONFIG_DIR=""
+REHEARSAL_SOURCE_DATA_DIR=""
+REHEARSAL_MOUNT_CONFIG_DIR=""
+REHEARSAL_MOUNT_DATA_DIR=""
+REHEARSAL_HOST_AGENTS_PATH=""
+RUNTIME_HOME=""
+RUNTIME_XDG_CONFIG=""
+RUNTIME_XDG_DATA=""
+RUNTIME_XDG_STATE=""
+EFFECTIVE_CONFIG_MOUNT_DIR=""
+EFFECTIVE_DATA_MOUNT_DIR=""
+EFFECTIVE_CONTAINER_NAME=""
+EFFECTIVE_RESTART_POLICY=""
+CONTAINER_AUTO_REMOVE=0
+DOCKER_ARGS=()
+APP_CMD=()
 
 is_true() {
   case "${1:-0}" in
@@ -210,8 +227,11 @@ Wrapper flags:
   --foreground, -f       Run attached in current terminal.
   --mount-ssh            Mount host ~/.ssh as read-only (explicit).
   -gh, --gh              Mount authenticated host gh config as read-only.
+  rehearse-migrations    Run OpenCode Web against temporary config/data copies.
   health, --health       Show diagnostics (no server start).
   diagnostics            Alias for health.
+  check-roadmap, roadmap-entropy
+                         Check roadmap/spec drift (repo checkout, no Docker).
   config                 Generate sample config file at:
                          ${OPENCODE_WEB_CONFIG_FILE}
   --version, version     Print wrapper version.
@@ -239,6 +259,7 @@ First-time setup:
 Preview without launching:
   OPENCODE_WEB_DRY_RUN=1 opencode_web_yolo --verbose
   opencode_web_yolo --dry-run --verbose
+  opencode_web_yolo rehearse-migrations --dry-run --verbose
 
 Host instruction file selection:
   --agents-file PATH            Explicit host instruction file override (read-only).
@@ -505,30 +526,185 @@ EOF
   fi
 }
 
+cleanup_rehearsal_scratch() {
+  if [ -n "${REHEARSAL_SCRATCH_ROOT:-}" ] && [ -d "${REHEARSAL_SCRATCH_ROOT}" ]; then
+    debug "Cleaning rehearsal scratch root ${REHEARSAL_SCRATCH_ROOT}."
+    rm -rf "${REHEARSAL_SCRATCH_ROOT}"
+  fi
+}
+
+copy_directory_tree() {
+  local source_dir="$1"
+  local destination_dir="$2"
+
+  mkdir -p "${destination_dir}"
+  if [ -d "${source_dir}" ]; then
+    cp -a "${source_dir}/." "${destination_dir}/"
+  fi
+}
+
+copy_host_agents_into_rehearsal_config() {
+  local source_file="$1"
+
+  REHEARSAL_HOST_AGENTS_PATH="${REHEARSAL_MOUNT_CONFIG_DIR}/AGENTS.md"
+  mkdir -p "$(dirname "${REHEARSAL_HOST_AGENTS_PATH}")"
+  cp "${source_file}" "${REHEARSAL_HOST_AGENTS_PATH}"
+}
+
+resolve_runtime_paths() {
+  RUNTIME_HOME="${OPENCODE_WEB_YOLO_HOME}"
+  RUNTIME_XDG_CONFIG="${OPENCODE_WEB_YOLO_HOME}/.config"
+  RUNTIME_XDG_DATA="${OPENCODE_WEB_YOLO_HOME}/.local/share"
+  RUNTIME_XDG_STATE="${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state"
+}
+
+resolve_launch_settings() {
+  local mode="$1"
+
+  EFFECTIVE_CONTAINER_NAME="${OPENCODE_WEB_CONTAINER_NAME}"
+  EFFECTIVE_RESTART_POLICY="${OPENCODE_WEB_RESTART_POLICY}"
+  CONTAINER_AUTO_REMOVE=0
+
+  if [ "$mode" = "rehearse_migrations" ]; then
+    EFFECTIVE_CONTAINER_NAME="${OPENCODE_WEB_CONTAINER_NAME}-rehearsal-$$"
+    EFFECTIVE_RESTART_POLICY="none"
+    CONTAINER_AUTO_REMOVE=1
+  fi
+}
+
+prepare_rehearsal_mounts() {
+  REHEARSAL_SOURCE_CONFIG_DIR="${OPENCODE_WEB_CONFIG_DIR}"
+  REHEARSAL_SOURCE_DATA_DIR="${OPENCODE_WEB_DATA_DIR}"
+  REHEARSAL_SCRATCH_ROOT="$(mktemp -d)"
+  REHEARSAL_MOUNT_CONFIG_DIR="${REHEARSAL_SCRATCH_ROOT}/config"
+  REHEARSAL_MOUNT_DATA_DIR="${REHEARSAL_SCRATCH_ROOT}/data"
+  REHEARSAL_HOST_AGENTS_PATH=""
+
+  trap cleanup_rehearsal_scratch EXIT
+  copy_directory_tree "${REHEARSAL_SOURCE_CONFIG_DIR}" "${REHEARSAL_MOUNT_CONFIG_DIR}"
+  copy_directory_tree "${REHEARSAL_SOURCE_DATA_DIR}" "${REHEARSAL_MOUNT_DATA_DIR}"
+  debug "Prepared rehearsal scratch root ${REHEARSAL_SCRATCH_ROOT}."
+}
+
+resolve_mount_sources() {
+  local mode="$1"
+
+  EFFECTIVE_CONFIG_MOUNT_DIR="${OPENCODE_WEB_CONFIG_DIR}"
+  EFFECTIVE_DATA_MOUNT_DIR="${OPENCODE_WEB_DATA_DIR}"
+
+  if [ "$mode" = "rehearse_migrations" ]; then
+    prepare_rehearsal_mounts
+    EFFECTIVE_CONFIG_MOUNT_DIR="${REHEARSAL_MOUNT_CONFIG_DIR}"
+    EFFECTIVE_DATA_MOUNT_DIR="${REHEARSAL_MOUNT_DATA_DIR}"
+    return 0
+  fi
+
+  mkdir -p "${OPENCODE_WEB_CONFIG_DIR}" "${OPENCODE_WEB_DATA_DIR}"
+}
+
+build_runtime_docker_args() {
+  DOCKER_ARGS=(
+    run
+    --name "${EFFECTIVE_CONTAINER_NAME}"
+    -p "127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}"
+    -w "${OPENCODE_WEB_YOLO_WORKDIR}"
+    -e "LOCAL_UID=$(id -u)"
+    -e "LOCAL_GID=$(id -g)"
+    -e "LOCAL_USER=$(id -un)"
+    -e "OPENCODE_WEB_YOLO_CLEANUP=${OPENCODE_WEB_YOLO_CLEANUP}"
+    -e "OPENCODE_WEB_YOLO_HOME=${OPENCODE_WEB_YOLO_HOME}"
+    -e "OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}"
+    -e "OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
+    -e "HOME=${RUNTIME_HOME}"
+    -e "XDG_CONFIG_HOME=${RUNTIME_XDG_CONFIG}"
+    -e "XDG_DATA_HOME=${RUNTIME_XDG_DATA}"
+    -e "XDG_STATE_HOME=${RUNTIME_XDG_STATE}"
+    -v "${PWD}:${OPENCODE_WEB_YOLO_WORKDIR}"
+    -v "${EFFECTIVE_CONFIG_MOUNT_DIR}:${OPENCODE_WEB_YOLO_HOME}/.config/opencode"
+    -v "${EFFECTIVE_DATA_MOUNT_DIR}:${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode"
+  )
+
+  if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ]; then
+    DOCKER_ARGS+=(--rm)
+  else
+    DOCKER_ARGS+=(--restart "${EFFECTIVE_RESTART_POLICY}")
+  fi
+
+  if is_true "${OPENCODE_WEB_RUN_DETACHED}"; then
+    DOCKER_ARGS+=(-d)
+  fi
+}
+
+build_app_command() {
+  local -a passthrough_args
+
+  passthrough_args=("$@")
+  APP_CMD=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
+  APP_CMD+=("${passthrough_args[@]}")
+}
+
+schedule_detached_rehearsal_cleanup() {
+  local container_name="$1"
+  local scratch_root="$2"
+
+  [ -n "${scratch_root}" ] || return 0
+  [ -d "${scratch_root}" ] || return 0
+
+  debug "Scheduling rehearsal scratch cleanup after container '${container_name}' exits."
+  REHEARSAL_SCRATCH_ROOT=""
+  OPENCODE_WEB_REHEARSAL_CONTAINER_NAME="${container_name}" \
+    OPENCODE_WEB_REHEARSAL_SCRATCH_ROOT="${scratch_root}" \
+    nohup bash -c '
+      set -euo pipefail
+      container_name="${OPENCODE_WEB_REHEARSAL_CONTAINER_NAME}"
+      scratch_root="${OPENCODE_WEB_REHEARSAL_SCRATCH_ROOT}"
+
+      while docker ps -a --filter "name=^/${container_name}$" --format "{{.Names}}" 2>/dev/null | grep -Fx -- "${container_name}" >/dev/null 2>&1; do
+        sleep 1
+      done
+
+      rm -rf "${scratch_root}"
+    ' >/dev/null 2>&1 &
+}
+
+describe_rehearsal_cleanup() {
+  if is_true "${OPENCODE_WEB_DRY_RUN}"; then
+    printf '%s\n' "wrapper-exit"
+    return 0
+  fi
+
+  if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ] && is_true "${OPENCODE_WEB_RUN_DETACHED}"; then
+    printf '%s\n' "after-container-exit"
+    return 0
+  fi
+
+  printf '%s\n' "wrapper-exit"
+}
+
 prepare_runtime_container() {
   local existing_name running_name
-  existing_name="$(docker ps -a --filter "name=^/${OPENCODE_WEB_CONTAINER_NAME}$" --format '{{.Names}}' 2>/dev/null || true)"
+  existing_name="$(docker ps -a --filter "name=^/${EFFECTIVE_CONTAINER_NAME}$" --format '{{.Names}}' 2>/dev/null || true)"
   if [ -z "$existing_name" ]; then
     return 0
   fi
 
-  running_name="$(docker ps --filter "name=^/${OPENCODE_WEB_CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null || true)"
+  running_name="$(docker ps --filter "name=^/${EFFECTIVE_CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null || true)"
   if is_true "${OPENCODE_WEB_DRY_RUN}"; then
     if [ -n "$running_name" ]; then
-      debug "Dry run: would stop and remove existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+      debug "Dry run: would stop and remove existing running container '${EFFECTIVE_CONTAINER_NAME}' before launch."
     else
-      debug "Dry run: would remove existing stopped container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
+      debug "Dry run: would remove existing stopped container '${EFFECTIVE_CONTAINER_NAME}' before launch."
     fi
     return 0
   fi
 
   if [ -n "$running_name" ]; then
-    log "Stopping existing running container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
-    docker stop "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to stop existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
+    log "Stopping existing running container '${EFFECTIVE_CONTAINER_NAME}' before launch."
+    docker stop "${EFFECTIVE_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to stop existing container '${EFFECTIVE_CONTAINER_NAME}'."
   fi
 
-  log "Removing existing container '${OPENCODE_WEB_CONTAINER_NAME}' before launch."
-  docker rm "${OPENCODE_WEB_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to remove existing container '${OPENCODE_WEB_CONTAINER_NAME}'."
+  log "Removing existing container '${EFFECTIVE_CONTAINER_NAME}' before launch."
+  docker rm "${EFFECTIVE_CONTAINER_NAME}" >/dev/null 2>&1 || die "Failed to remove existing container '${EFFECTIVE_CONTAINER_NAME}'."
 }
 
 main() {
@@ -536,10 +712,9 @@ main() {
   local host_agents_enabled host_agents_source host_agents_path
   local host_agents_container_path host_agents_opencode_path
   local host_agents_codex_path host_agents_copilot_path host_agents_claude_path
-  local host_agents_log host_agents_disabled
+  local host_agents_log host_agents_disabled host_agents_delivery
   local gh_host_config_dir
-  local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
-  local -a passthrough docker_args app_cmd docker_cmd
+  local -a passthrough docker_cmd
 
   mode="run"
   use_gh=0
@@ -555,6 +730,7 @@ main() {
   host_agents_claude_path="$(expand_tilde "${HOME}/.claude/CLAUDE.md")"
   host_agents_log=""
   host_agents_disabled=0
+  host_agents_delivery="none"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -603,8 +779,14 @@ main() {
       -gh|--gh)
         use_gh=1
         ;;
+      rehearse-migrations)
+        mode="rehearse_migrations"
+        ;;
       health|--health|diagnostics)
         mode="health"
+        ;;
+      check-roadmap|roadmap-entropy)
+        mode="roadmap_entropy"
         ;;
       config)
         mode="config"
@@ -643,6 +825,10 @@ main() {
       show_health
       return $?
       ;;
+    roadmap_entropy)
+      run_roadmap_entropy
+      return $?
+      ;;
   esac
 
   apply_self_update
@@ -657,38 +843,10 @@ main() {
   [ -n "${OPENCODE_WEB_CONTAINER_NAME}" ] || die "OPENCODE_WEB_CONTAINER_NAME must be non-empty."
   [ -n "${OPENCODE_WEB_RESTART_POLICY}" ] || die "OPENCODE_WEB_RESTART_POLICY must be non-empty."
 
-  runtime_home="${OPENCODE_WEB_YOLO_HOME}"
-  runtime_xdg_config="${OPENCODE_WEB_YOLO_HOME}/.config"
-  runtime_xdg_data="${OPENCODE_WEB_YOLO_HOME}/.local/share"
-  runtime_xdg_state="${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode/state"
-
-  mkdir -p "${OPENCODE_WEB_CONFIG_DIR}" "${OPENCODE_WEB_DATA_DIR}"
-
-  docker_args=(
-    run
-    --name "${OPENCODE_WEB_CONTAINER_NAME}"
-    --restart "${OPENCODE_WEB_RESTART_POLICY}"
-    -p "127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}"
-    -w "${OPENCODE_WEB_YOLO_WORKDIR}"
-    -e "LOCAL_UID=$(id -u)"
-    -e "LOCAL_GID=$(id -g)"
-    -e "LOCAL_USER=$(id -un)"
-    -e "OPENCODE_WEB_YOLO_CLEANUP=${OPENCODE_WEB_YOLO_CLEANUP}"
-    -e "OPENCODE_WEB_YOLO_HOME=${OPENCODE_WEB_YOLO_HOME}"
-    -e "OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}"
-    -e "OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
-    -e "HOME=${runtime_home}"
-    -e "XDG_CONFIG_HOME=${runtime_xdg_config}"
-    -e "XDG_DATA_HOME=${runtime_xdg_data}"
-    -e "XDG_STATE_HOME=${runtime_xdg_state}"
-    -v "${PWD}:${OPENCODE_WEB_YOLO_WORKDIR}"
-    -v "${OPENCODE_WEB_CONFIG_DIR}:${OPENCODE_WEB_YOLO_HOME}/.config/opencode"
-    -v "${OPENCODE_WEB_DATA_DIR}:${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode"
-  )
-
-  if is_true "${OPENCODE_WEB_RUN_DETACHED}"; then
-    docker_args+=(-d)
-  fi
+  resolve_runtime_paths
+  resolve_launch_settings "${mode}"
+  resolve_mount_sources "${mode}"
+  build_runtime_docker_args
 
   if [ "$use_gh" -eq 1 ]; then
     require_command gh
@@ -698,16 +856,16 @@ main() {
     gh_host_config_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/gh"
     [ -d "$gh_host_config_dir" ] || die "GitHub CLI config directory not found at ${gh_host_config_dir}."
     warn "Mounting host GitHub CLI auth/config into the container. Container processes can use your host GitHub credentials."
-    docker_args+=(-v "${gh_host_config_dir}:${OPENCODE_WEB_YOLO_HOME}/.config/gh:ro")
+    DOCKER_ARGS+=(-v "${gh_host_config_dir}:${OPENCODE_WEB_YOLO_HOME}/.config/gh:ro")
   fi
 
   if [ "$mount_ssh" -eq 1 ]; then
     [ -d "${HOME}/.ssh" ] || die "--mount-ssh requested but ${HOME}/.ssh does not exist."
     warn "Mounting host SSH keys into container as read-only. Prefer least privilege keys and branch protection."
-    docker_args+=(-v "${HOME}/.ssh:${OPENCODE_WEB_YOLO_HOME}/.ssh:ro")
+    DOCKER_ARGS+=(-v "${HOME}/.ssh:${OPENCODE_WEB_YOLO_HOME}/.ssh:ro")
     if [ -f "${HOME}/.gitconfig" ]; then
-      docker_args+=(-v "${HOME}/.gitconfig:${OPENCODE_WEB_YOLO_HOME}/.gitconfig:ro")
-      docker_args+=(-e "GIT_CONFIG_GLOBAL=${OPENCODE_WEB_YOLO_HOME}/.gitconfig")
+      DOCKER_ARGS+=(-v "${HOME}/.gitconfig:${OPENCODE_WEB_YOLO_HOME}/.gitconfig:ro")
+      DOCKER_ARGS+=(-e "GIT_CONFIG_GLOBAL=${OPENCODE_WEB_YOLO_HOME}/.gitconfig")
     fi
   fi
 
@@ -746,7 +904,14 @@ main() {
           die "Host instruction file is not readable at ${host_agents_path}."
         fi
         host_agents_log="Using host instruction file from ${host_agents_source}: ${host_agents_path}"
-        docker_args+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
+        if [ "$mode" = "rehearse_migrations" ]; then
+          copy_host_agents_into_rehearsal_config "${host_agents_path}"
+          host_agents_delivery="scratch-copy"
+          host_agents_log="${host_agents_log} (copied into rehearsal scratch config at ${REHEARSAL_HOST_AGENTS_PATH})"
+        else
+          host_agents_delivery="bind-mount"
+          DOCKER_ARGS+=(-v "${host_agents_path}:${host_agents_container_path}:ro")
+        fi
       else
         if [ "$host_agents_source" = "flag" ] || [ "$host_agents_source" = "env" ]; then
           die "Host instruction file not found at ${host_agents_path}."
@@ -756,37 +921,51 @@ main() {
     fi
   else
     host_agents_log="Host instruction file mount disabled by --no-host-agents."
+    host_agents_delivery="disabled"
   fi
 
-  app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
-  app_cmd+=("${passthrough[@]}")
+  build_app_command "${passthrough[@]}"
 
   ensure_image
-  prepare_runtime_container
+  if [ "$CONTAINER_AUTO_REMOVE" -eq 0 ]; then
+    prepare_runtime_container
+  fi
 
-  docker_cmd=(docker "${docker_args[@]}" "${OPENCODE_WEB_YOLO_IMAGE}" "${app_cmd[@]}")
+  docker_cmd=(docker "${DOCKER_ARGS[@]}" "${OPENCODE_WEB_YOLO_IMAGE}" "${APP_CMD[@]}")
 
   if is_true "${OPENCODE_WEB_DRY_RUN}"; then
     printf '%s\n' "DRY RUN"
     printf '%s\n' "wrapper_version=${WRAPPER_VERSION}"
     printf '%s\n' "publish=127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}"
     printf '%s\n' "hostname=${OPENCODE_WEB_HOSTNAME}"
-    printf '%s\n' "container_name=${OPENCODE_WEB_CONTAINER_NAME}"
-    printf '%s\n' "restart_policy=${OPENCODE_WEB_RESTART_POLICY}"
+    printf '%s\n' "container_name=${EFFECTIVE_CONTAINER_NAME}"
+    printf '%s\n' "restart_policy=${EFFECTIVE_RESTART_POLICY}"
     printf '%s\n' "run_detached=${OPENCODE_WEB_RUN_DETACHED}"
     printf '%s\n' "auto_pull=${OPENCODE_WEB_AUTO_PULL}"
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
-    printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
-    printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"
-    printf '%s\n' "runtime_env_home=${runtime_home}"
-    printf '%s\n' "runtime_env_xdg_config_home=${runtime_xdg_config}"
-    printf '%s\n' "runtime_env_xdg_data_home=${runtime_xdg_data}"
-    printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
+    printf '%s\n' "opencode_config_dir=${EFFECTIVE_CONFIG_MOUNT_DIR}"
+    printf '%s\n' "opencode_data_dir=${EFFECTIVE_DATA_MOUNT_DIR}"
+    printf '%s\n' "runtime_env_home=${RUNTIME_HOME}"
+    printf '%s\n' "runtime_env_xdg_config_home=${RUNTIME_XDG_CONFIG}"
+    printf '%s\n' "runtime_env_xdg_data_home=${RUNTIME_XDG_DATA}"
+    printf '%s\n' "runtime_env_xdg_state_home=${RUNTIME_XDG_STATE}"
     printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
     printf '%s\n' "host_agents_source=${host_agents_source}"
     printf '%s\n' "host_agents_path=${host_agents_path}"
     printf '%s\n' "host_agents_disabled=${host_agents_disabled}"
+    if [ "$mode" = "rehearse_migrations" ]; then
+      printf '%s\n' "host_agents_delivery=${host_agents_delivery}"
+      printf '%s\n' "rehearsal_mode=1"
+      printf '%s\n' "rehearsal_source_config_dir=${REHEARSAL_SOURCE_CONFIG_DIR}"
+      printf '%s\n' "rehearsal_source_data_dir=${REHEARSAL_SOURCE_DATA_DIR}"
+      printf '%s\n' "rehearsal_mount_config_dir=${REHEARSAL_MOUNT_CONFIG_DIR}"
+      printf '%s\n' "rehearsal_mount_data_dir=${REHEARSAL_MOUNT_DATA_DIR}"
+      if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
+        printf '%s\n' "rehearsal_host_agents_path=${REHEARSAL_HOST_AGENTS_PATH}"
+      fi
+      printf '%s\n' "rehearsal_cleanup=$(describe_rehearsal_cleanup)"
+    fi
     printf '%s\n' "docker_command:"
     printf '  '
     printf '%q ' "${docker_cmd[@]}"
@@ -801,7 +980,26 @@ main() {
     log "${host_agents_log}"
   fi
 
+  if [ "$mode" = "rehearse_migrations" ]; then
+    log "Migration rehearsal mode active. Host config/data stay isolated from scratch mounts."
+    log "  source_config=${REHEARSAL_SOURCE_CONFIG_DIR}"
+    log "  source_data=${REHEARSAL_SOURCE_DATA_DIR}"
+    log "  scratch_config=${REHEARSAL_MOUNT_CONFIG_DIR}"
+    log "  scratch_data=${REHEARSAL_MOUNT_DATA_DIR}"
+    if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
+      log "  scratch_agents=${REHEARSAL_HOST_AGENTS_PATH}"
+    fi
+    log "  cleanup=$(describe_rehearsal_cleanup)"
+    if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ]; then
+      log "  container_name=${EFFECTIVE_CONTAINER_NAME} (ephemeral)"
+    fi
+  fi
+
   "${docker_cmd[@]}"
+
+  if [ "$mode" = "rehearse_migrations" ] && [ "$CONTAINER_AUTO_REMOVE" -eq 1 ] && is_true "${OPENCODE_WEB_RUN_DETACHED}"; then
+    schedule_detached_rehearsal_cleanup "${EFFECTIVE_CONTAINER_NAME}" "${REHEARSAL_SCRATCH_ROOT}"
+  fi
 }
 
 main "$@"

@@ -60,7 +60,9 @@ Wrapper flags:
 - `--foreground`, `-f`
 - `--mount-ssh`
 - `-gh`, `--gh`
+- `rehearse-migrations`
 - `health`, `--health`, `diagnostics`
+- `check-roadmap`, `roadmap-entropy`
 - `config`
 - `--help`, `-h`, `help`
 - `--version`, `version`
@@ -72,9 +74,29 @@ Environment variables:
 - `OPENCODE_WEB_YOLO_BRANCH` (self-update branch, default: `main`)
 
 Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
+Use `opencode_web_yolo rehearse-migrations --dry-run --verbose` to preview the scratch config/data clones that would be mounted for a migration rehearsal.
+That rehearsal preview reports `rehearsal_cleanup=wrapper-exit` because no container is started and the temporary scratch tree is removed when the wrapper exits.
 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
 If a container with the configured name already exists, wrapper launch replaces it (stops if running, then removes, then starts fresh).
+
+## Migration Rehearsal
+
+`opencode_web_yolo rehearse-migrations` starts the existing OpenCode Web runtime against temporary copies of `OPENCODE_WEB_CONFIG_DIR` and `OPENCODE_WEB_DATA_DIR`.
+
+- The real persistence directories are not mounted in rehearsal mode.
+- Authentication is still mandatory and the localhost-only publish stays `127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`.
+- Host AGENTS selection keeps the normal precedence, but the selected file is copied into the rehearsal scratch config tree instead of being bind-mounted from the host.
+- `-gh` and `--mount-ssh` keep their normal validation and warning behavior.
+- Rehearsal runs use an ephemeral `--rm` container named `${OPENCODE_WEB_CONTAINER_NAME}-rehearsal-<pid>` so the main runtime container is left alone.
+- Dry-run output includes `rehearsal_source_*` and `rehearsal_mount_*` lines so operators can verify isolation before launch.
+- Foreground rehearsals clean scratch directories when the wrapper exits. Detached rehearsals clean them after the temporary container stops and auto-removes.
+
+Example:
+
+```bash
+OPENCODE_SERVER_PASSWORD='change-me-now' opencode_web_yolo rehearse-migrations --foreground
+```
 
 ## Persistence Paths
 
@@ -84,6 +106,7 @@ If a container with the configured name already exists, wrapper launch replaces 
 
 Provider auth/session state (for example OpenAI and GitHub Copilot links) persists across restarts from the OpenCode data path.
 The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`) to `/home/opencode` paths so app writes always land on mounted host directories.
+Use `rehearse-migrations` when you need to exercise startup or data migrations without mutating those host persistence trees.
 
 ## Instruction File Selection
 
@@ -99,6 +122,7 @@ Mount behavior:
 - The selected file is mounted read-only to `/home/opencode/.config/opencode/AGENTS.md`.
 - This normalizes non-OpenCode filenames (Codex/Copilot/Claude conventions) to OpenCode's global rule path.
 - `--no-host-agents` disables this selected-file mount.
+- In `rehearse-migrations`, the selected file is staged into the scratch config copy at `/home/opencode/.config/opencode/AGENTS.md` so the real host persistence paths remain unmounted.
 
 Examples:
 

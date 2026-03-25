@@ -33,4 +33,15 @@ assert_contains "$output" "opencode_web_yolo config"
 assert_contains "$output" "${HOME}/.opencode_web_yolo/config"
 assert_contains "$output" "export OPENCODE_SERVER_PASSWORD='change-me-now'"
 
+set +e
+output_rehearsal="$("${ROOT_DIR}/.opencode_web_yolo.sh" rehearse-migrations 2>&1)"
+status=$?
+set -e
+
+if [ "$status" -eq 0 ]; then
+  fail "expected rehearsal mode to fail when OPENCODE_SERVER_PASSWORD is missing"
+fi
+assert_contains "$output_rehearsal" "OPENCODE_SERVER_PASSWORD must be set and non-empty"
+assert_contains "$output_rehearsal" "Authentication is mandatory for all access, including localhost."
+
 printf '%s\n' "PASS: password-required gate"
