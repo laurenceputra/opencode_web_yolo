@@ -5,6 +5,7 @@
 - Host command: `opencode_web_yolo`
 - Wrapper builds/validates runtime image and runs:
   - `opencode web --hostname 0.0.0.0 --port ${OPENCODE_WEB_PORT}`
+- Wrapper command `rehearse-migrations` reuses the same runtime image/entrypoint/app command, but swaps host config/data mounts for temporary scratch copies.
 - Docker publish contract:
   - `-p 127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`
 - Container lifecycle defaults:
@@ -39,6 +40,9 @@ Mount model:
   - `${PWD}` -> `/workspace` (rw)
   - `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.config/opencode` (rw)
   - `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` -> `${OPENCODE_WEB_YOLO_HOME}/.local/share/opencode` (rw)
+- Rehearsal mounts:
+  - `rehearse-migrations` clones `${OPENCODE_WEB_CONFIG_DIR}` and `${OPENCODE_WEB_DATA_DIR}` into `mktemp -d` scratch directories and mounts those scratch copies instead of the real persistence paths.
+  - The wrapper must not create missing host config/data directories when rehearsal mode is selected.
 - Optional host AGENTS:
   - Selection precedence: `--agents-file` > `OPENCODE_HOST_AGENTS` > `~/.config/opencode/AGENTS.md` > `~/.codex/AGENTS.md` > `~/.copilot/copilot-instructions.md` > `~/.claude/CLAUDE.md`.
   - The selected host file mounts read-only to `${OPENCODE_WEB_YOLO_HOME}/.config/opencode/AGENTS.md`.
@@ -60,6 +64,22 @@ Mount model:
   - Mounts `${HOME}/.ssh` (ro) only on explicit request and prints warning.
   - Also mounts `${HOME}/.gitconfig` (ro) when present.
   - Exports `GIT_CONFIG_GLOBAL=${OPENCODE_WEB_YOLO_HOME}/.gitconfig` when mounted to avoid home-resolution drift.
+
+## Migration Rehearsal Contract
+
+- Entry command: `opencode_web_yolo rehearse-migrations [wrapper_flags] [-- opencode_web_args...]`
+- Password/auth requirement is unchanged: `OPENCODE_SERVER_PASSWORD` must be set and non-empty.
+- Local-only publish contract is unchanged: `-p 127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`.
+- Rehearsal mode must not mount the real `${OPENCODE_WEB_CONFIG_DIR}` or `${OPENCODE_WEB_DATA_DIR}` into the container.
+- Rehearsal mode uses an ephemeral `--rm` container named `${OPENCODE_WEB_CONTAINER_NAME}-rehearsal-<pid>` and does not stop/remove the main runtime container.
+- Dry-run/verbose output must surface:
+  - rehearsal mode activation
+  - source host config/data paths
+  - scratch config/data mount paths
+  - cleanup behavior (`wrapper-exit` for foreground/dry-run, deferred until detached container exit otherwise)
+- Cleanup:
+  - foreground and dry-run rehearsals remove the scratch root via wrapper exit trap
+  - detached rehearsals hand scratch cleanup to a background watcher after the temporary container auto-removes
 
 ## Image Contents and Entrypoint
 
@@ -138,6 +158,7 @@ Controls:
 Tests and CI assert:
 - `bash -n` and `shellcheck` on touched shell scripts.
 - dry-run output contract (local-only port mapping, opencode web command, env values, config/data mounts, lifecycle flags, detach/pull defaults).
+- rehearsal-mode output contract (scratch mount substitution, no host config/data creation, unchanged host AGENTS precedence, and scratch cleanup).
 - launch behavior replaces same-name containers by stopping running instances, then removing the old container before re-run.
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
