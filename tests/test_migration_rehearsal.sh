@@ -34,7 +34,8 @@ assert_contains "$output_dry_run" "Using host instruction file from opencode: ${
 assert_contains "$output_dry_run" "--model local"
 assert_contains "$output_dry_run" "restart_policy=none"
 assert_contains "$output_dry_run" "container_name=opencode_web_yolo-rehearsal-"
-assert_contains "$output_dry_run" "rehearsal_cleanup=after-container-exit"
+assert_contains "$output_dry_run" "rehearsal_cleanup=wrapper-exit"
+assert_not_contains "$output_dry_run" "rehearsal_cleanup=after-container-exit"
 assert_not_contains "$output_dry_run" "-v ${OPENCODE_WEB_CONFIG_DIR}:/home/opencode/.config/opencode"
 assert_not_contains "$output_dry_run" "-v ${OPENCODE_WEB_DATA_DIR}:/home/opencode/.local/share/opencode"
 assert_not_contains "$output_dry_run" ":/home/opencode/.config/opencode/AGENTS.md:ro"
@@ -80,6 +81,7 @@ if [ -e "$OPENCODE_WEB_DATA_DIR" ]; then
   fail "expected rehearsal foreground run to avoid creating host data dir"
 fi
 assert_contains "$output_run" "Migration rehearsal mode active"
+assert_contains "$output_run" "cleanup=wrapper-exit"
 assert_contains "$output_run" "container_name=opencode_web_yolo-rehearsal-"
 
 printf '%s\n' "PASS: migration rehearsal behavior"

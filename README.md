@@ -75,6 +75,7 @@ Environment variables:
 
 Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command and effective settings.
 Use `opencode_web_yolo rehearse-migrations --dry-run --verbose` to preview the scratch config/data clones that would be mounted for a migration rehearsal.
+That rehearsal preview reports `rehearsal_cleanup=wrapper-exit` because no container is started and the temporary scratch tree is removed when the wrapper exits.
 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
 If a container with the configured name already exists, wrapper launch replaces it (stops if running, then removes, then starts fresh).

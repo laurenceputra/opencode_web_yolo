@@ -667,6 +667,20 @@ schedule_detached_rehearsal_cleanup() {
     ' >/dev/null 2>&1 &
 }
 
+describe_rehearsal_cleanup() {
+  if is_true "${OPENCODE_WEB_DRY_RUN}"; then
+    printf '%s\n' "wrapper-exit"
+    return 0
+  fi
+
+  if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ] && is_true "${OPENCODE_WEB_RUN_DETACHED}"; then
+    printf '%s\n' "after-container-exit"
+    return 0
+  fi
+
+  printf '%s\n' "wrapper-exit"
+}
+
 prepare_runtime_container() {
   local existing_name running_name
   existing_name="$(docker ps -a --filter "name=^/${EFFECTIVE_CONTAINER_NAME}$" --format '{{.Names}}' 2>/dev/null || true)"
@@ -950,7 +964,7 @@ main() {
       if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
         printf '%s\n' "rehearsal_host_agents_path=${REHEARSAL_HOST_AGENTS_PATH}"
       fi
-      printf '%s\n' "rehearsal_cleanup=$(if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ] && is_true "${OPENCODE_WEB_RUN_DETACHED}"; then printf '%s' "after-container-exit"; else printf '%s' "wrapper-exit"; fi)"
+      printf '%s\n' "rehearsal_cleanup=$(describe_rehearsal_cleanup)"
     fi
     printf '%s\n' "docker_command:"
     printf '  '
@@ -975,6 +989,7 @@ main() {
     if [ -n "${REHEARSAL_HOST_AGENTS_PATH}" ]; then
       log "  scratch_agents=${REHEARSAL_HOST_AGENTS_PATH}"
     fi
+    log "  cleanup=$(describe_rehearsal_cleanup)"
     if [ "$CONTAINER_AUTO_REMOVE" -eq 1 ]; then
       log "  container_name=${EFFECTIVE_CONTAINER_NAME} (ephemeral)"
     fi
