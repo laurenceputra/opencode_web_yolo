@@ -11,19 +11,7 @@ FAKE_BIN="${TMP_DIR}/bin"
 WRAPPER_VERSION="$(tr -d '[:space:]' <"${ROOT_DIR}/VERSION")"
 
 setup_fake_docker "$FAKE_BIN" "$WRAPPER_VERSION"
-
-cat >"${FAKE_BIN}/gh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-if [ "${1:-}" = "auth" ] && [ "${2:-}" = "status" ]; then
-  if [ "${GH_AUTH_FAIL:-0}" = "1" ]; then
-    exit 1
-  fi
-  exit 0
-fi
-exit 0
-EOF
-chmod +x "${FAKE_BIN}/gh"
+setup_fake_gh "$FAKE_BIN"
 
 export PATH="${FAKE_BIN}:${PATH}"
 export HOME="${TMP_DIR}/home"
