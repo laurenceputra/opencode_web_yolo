@@ -652,19 +652,17 @@ schedule_detached_rehearsal_cleanup() {
 
   debug "Scheduling rehearsal scratch cleanup after container '${container_name}' exits."
   REHEARSAL_SCRATCH_ROOT=""
-  OPENCODE_WEB_REHEARSAL_CONTAINER_NAME="${container_name}" \
-    OPENCODE_WEB_REHEARSAL_SCRATCH_ROOT="${scratch_root}" \
-    nohup bash -c '
+  nohup bash -c '
       set -euo pipefail
-      container_name="${OPENCODE_WEB_REHEARSAL_CONTAINER_NAME}"
-      scratch_root="${OPENCODE_WEB_REHEARSAL_SCRATCH_ROOT}"
+      container_name="$1"
+      scratch_root="$2"
 
       while docker ps -a --filter "name=^/${container_name}$" --format "{{.Names}}" 2>/dev/null | grep -Fx -- "${container_name}" >/dev/null 2>&1; do
         sleep 1
       done
 
-      rm -rf "${scratch_root}"
-    ' >/dev/null 2>&1 &
+      rm -rf -- "${scratch_root}"
+    ' bash "${container_name}" "${scratch_root}" >/dev/null 2>&1 &
 }
 
 describe_rehearsal_cleanup() {
