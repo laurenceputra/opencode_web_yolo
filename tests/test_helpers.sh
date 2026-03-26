@@ -2,8 +2,20 @@
 set -euo pipefail
 
 fail() {
-  printf '%s\n' "FAIL: $*" >&2
+  local prefix=""
+  if [ -n "${TEST_CASE_CONTEXT:-}" ]; then
+    prefix="[${TEST_CASE_CONTEXT}] "
+  fi
+  printf '%s\n' "FAIL: ${prefix}$*" >&2
   exit 1
+}
+
+set_test_case_context() {
+  TEST_CASE_CONTEXT="$1"
+}
+
+clear_test_case_context() {
+  TEST_CASE_CONTEXT=""
 }
 
 assert_equals() {
@@ -35,6 +47,45 @@ assert_file_executable() {
   if [ ! -x "$path" ]; then
     fail "expected file to be executable: ${path}"
   fi
+}
+
+assert_nonempty() {
+  local value="$1"
+  local description="$2"
+  if [ -z "$value" ]; then
+    fail "expected non-empty value for ${description}"
+  fi
+}
+
+assert_path_absent() {
+  local path="$1"
+  if [ -e "$path" ]; then
+    fail "expected path to be absent: ${path}"
+  fi
+}
+
+extract_output_value() {
+  local output="$1"
+  local key="$2"
+  printf '%s\n' "$output" | sed -n "s/^${key}=//p" | tail -n 1
+}
+
+create_test_tmpdir() {
+  mktemp -d "${TMPDIR:-/tmp}/opencode-web-yolo.XXXXXX"
+}
+
+format_seeded_case_label() {
+  local seed="$1"
+  local case_id="$2"
+  local description="$3"
+  printf '%s\n' "seed=${seed} case=${case_id} ${description}"
+}
+
+seeded_cycle_index() {
+  local seed="$1"
+  local offset="$2"
+  local modulo="$3"
+  printf '%s\n' "$(((seed + offset) % modulo))"
 }
 
 managed_wrapper_files() {
@@ -156,4 +207,21 @@ printf '%s\n' "unexpected curl args: $*" >&2
 exit 1
 EOF
   chmod +x "${fake_bin_dir}/curl"
+}
+
+setup_fake_gh() {
+  local fake_bin_dir="$1"
+  mkdir -p "$fake_bin_dir"
+  cat >"${fake_bin_dir}/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = "auth" ] && [ "${2:-}" = "status" ]; then
+  if [ "${GH_AUTH_FAIL:-0}" = "1" ]; then
+    exit 1
+  fi
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${fake_bin_dir}/gh"
 }

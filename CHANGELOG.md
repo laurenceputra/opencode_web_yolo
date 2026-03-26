@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.7] - 2026-03-26
+
+- Reworked detached rehearsal scratch cleanup command quoting so shellcheck accepts the watcher helper without changing runtime behavior.
+- Bumped release metadata after the wrapper runtime script change so CI version-discipline checks remain green.
+
 ## [0.1.6] - 2026-03-03
 
 - Defaulted `OPENCODE_WEB_YOLO_REPO` to `laurenceputra/opencode_web_yolo` so managed installs can resolve remote version checks without requiring manual repo configuration.
