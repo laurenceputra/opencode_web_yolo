@@ -10,6 +10,7 @@ Use this file when adding or changing wrapper CLI behavior.
   - `--mount-ssh`
   - `-gh`, `--gh`
   - `health`, `--health`, `diagnostics`
+  - `check-roadmap`, `roadmap-entropy`
   - `config`
   - `--version`, `version`
   - `--verbose`, `-v`

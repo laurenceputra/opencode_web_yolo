@@ -15,6 +15,8 @@ _opencode_web_yolo_completion() {
     '--health:Run diagnostics checks'
     'diagnostics:Run diagnostics checks'
     'health:Run diagnostics checks'
+    'check-roadmap:Run roadmap entropy detector'
+    'roadmap-entropy:Run roadmap entropy detector'
     'config:Generate sample config file'
     '--help:Show wrapper help'
     '-h:Show wrapper help'

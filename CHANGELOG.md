@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.8] - 2026-03-27
+
+- Extended the roadmap entropy detector contract to watch command completion surfaces and the runtime flag contract so surfaced wrapper modes cannot drift silently.
+- Strengthened roadmap entropy regression coverage with clean and failing fixture repos, plus help-text assertions for the no-Docker maintainer workflow.
+
 ## [0.1.7] - 2026-03-24
 
 - Added the Roadmap entropy detector quality gate via `check-roadmap` / `roadmap-entropy` to detect roadmap scope creep and drift across the tracked spec, wrapper help, docs, tests, and CI wiring.
