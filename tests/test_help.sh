@@ -17,6 +17,7 @@ assert_contains "$output_long" "--help, -h, help"
 assert_contains "$output_long" "--foreground, -f"
 assert_contains "$output_long" "--no-pull"
 assert_contains "$output_long" "check-roadmap, roadmap-entropy"
+assert_contains "$output_long" "Check roadmap/spec drift (repo checkout, no Docker)."
 assert_contains "$output_long" "opencode_web_yolo config"
 
 output_short="$("${ROOT_DIR}/.opencode_web_yolo.sh" -h 2>&1)"

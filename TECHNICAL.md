@@ -129,7 +129,7 @@ Controls:
 
 - Repo-local read-only quality gate exposed as `check-roadmap` and `roadmap-entropy`.
 - Source of truth: `docs/roadmap-entropy-detector.md`.
-- Validates required spec sections plus explicit drift markers across `.opencode_web_yolo.sh`, `README.md`, `TECHNICAL.md`, tests, and `.github/workflows/ci.yml`.
+- Validates required spec sections plus explicit drift markers across `.opencode_web_yolo.sh`, shell completion surfaces, runtime flag contracts, `README.md`, `TECHNICAL.md`, tests, and `.github/workflows/ci.yml`.
 - Runs without Docker and without auth, but requires a repository checkout containing the tracked files under watch.
 
 ## Release Checklist
