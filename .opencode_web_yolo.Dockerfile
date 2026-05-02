@@ -4,9 +4,14 @@ FROM ${BASE_IMAGE}
 ARG OPENCODE_NPM_PACKAGE=opencode-ai
 ARG OPENCODE_VERSION=latest
 ARG WRAPPER_VERSION=0.0.0
+ARG OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV OPENCODE_WEB_YOLO_HOME=/home/opencode
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
+  && chmod 1777 "${PLAYWRIGHT_BROWSERS_PATH}"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -22,9 +27,16 @@ RUN apt-get update \
 
 RUN npm install -g "${OPENCODE_NPM_PACKAGE}@${OPENCODE_VERSION}"
 
+RUN if [ "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" = "1" ]; then \
+      npm install -g playwright@latest \
+      && playwright install --with-deps chromium \
+      && chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
+    fi
+
 RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
-  && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version
+  && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version \
+  && printf '%s\n' "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" >/opt/opencode-web-yolo-playwright
 
 RUN cat <<'EOF' >/app/AGENTS.md
 # opencode_web_yolo fallback instructions

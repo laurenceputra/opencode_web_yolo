@@ -203,6 +203,7 @@ Usage:
 Wrapper flags:
   --pull                 Force docker rebuild/pull behavior.
   --no-pull              Skip default pull-on-start behavior for this run.
+  --playwright           Build runtime image with Playwright Chromium.
   --agents-file PATH     Mount a host AGENTS.md file read-only.
   --no-host-agents       Skip mounting host AGENTS.md.
   --dry-run              Print docker command and exit.
@@ -273,6 +274,7 @@ export OPENCODE_WEB_CONTAINER_NAME=opencode_web_yolo
 export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 export OPENCODE_WEB_RUN_DETACHED=1
 export OPENCODE_WEB_AUTO_PULL=1
+export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=0
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 # Required: set a non-empty password before running the server.
@@ -289,7 +291,7 @@ EOF
 
 show_health() {
   local status=0
-  local image_wrapper_version image_opencode_version
+  local image_wrapper_version image_opencode_version image_playwright
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local container_home_env container_xdg_config_env container_xdg_data_env container_xdg_state_env
 
@@ -311,6 +313,7 @@ show_health() {
   printf '%s\n' "  run_detached=${OPENCODE_WEB_RUN_DETACHED}"
   printf '%s\n' "  auto_pull=${OPENCODE_WEB_AUTO_PULL}"
   printf '%s\n' "  build_pull=${OPENCODE_WEB_BUILD_PULL}"
+  printf '%s\n' "  build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
@@ -334,8 +337,10 @@ show_health() {
     printf '%s\n' "  image_present=yes"
     image_wrapper_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-version 2>/dev/null || true)"
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
+    image_playwright="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright 2>/dev/null || true)"
     printf '%s\n' "  image_wrapper_version=${image_wrapper_version:-unknown}"
     printf '%s\n' "  image_opencode_version=${image_opencode_version:-unknown}"
+    printf '%s\n' "  image_build_playwright=${image_playwright:-unknown}"
   else
     printf '%s\n' "  image_present=no"
   fi
@@ -424,6 +429,7 @@ build_image() {
     --build-arg "WRAPPER_VERSION=${WRAPPER_VERSION}"
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
     --build-arg "OPENCODE_VERSION=${build_opencode_version}"
+    --build-arg "OPENCODE_WEB_BUILD_PLAYWRIGHT=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"
     "${SCRIPT_DIR}"
   )
@@ -433,7 +439,7 @@ build_image() {
 }
 
 ensure_image() {
-  local expected_opencode_version image_wrapper_version image_opencode_version
+  local expected_opencode_version image_wrapper_version image_opencode_version image_playwright
   local -a reasons
 
   reasons=()
@@ -460,6 +466,11 @@ ensure_image() {
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
     if [ -n "$expected_opencode_version" ] && [ "$image_opencode_version" != "$expected_opencode_version" ]; then
       reasons+=("OpenCode version mismatch (image='${image_opencode_version:-missing}', expected='${expected_opencode_version}')")
+    fi
+
+    image_playwright="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright 2>/dev/null || true)"
+    if [ "$image_playwright" != "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" ]; then
+      reasons+=("Playwright build mismatch (image='${image_playwright:-missing}', expected='${OPENCODE_WEB_BUILD_PLAYWRIGHT}')")
     fi
   fi
 
@@ -569,6 +580,9 @@ main() {
       --no-pull)
         OPENCODE_WEB_AUTO_PULL=0
         OPENCODE_WEB_BUILD_PULL=0
+        ;;
+      --playwright)
+        OPENCODE_WEB_BUILD_PLAYWRIGHT=1
         ;;
       --agents-file=*)
         host_agents_enabled=1
@@ -776,6 +790,7 @@ main() {
     printf '%s\n' "run_detached=${OPENCODE_WEB_RUN_DETACHED}"
     printf '%s\n' "auto_pull=${OPENCODE_WEB_AUTO_PULL}"
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
+    printf '%s\n' "build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
     printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
     printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"
     printf '%s\n' "runtime_env_home=${runtime_home}"
