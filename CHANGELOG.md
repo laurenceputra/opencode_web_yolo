@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.8] - 2026-05-02
+
+- Optimized Dockerfile layer ordering/caching for Playwright-enabled runtime builds to improve rebuild efficiency without changing runtime behavior.
+
 ## [0.1.7] - 2026-05-02
 
 - Added an optional Playwright runtime image build flag so operators can include Playwright dependencies only when needed.

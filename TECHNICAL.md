@@ -70,6 +70,7 @@ Docker image includes:
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - OpenCode CLI (`opencode-ai` npm package by default)
 - when Playwright build is enabled: global `playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+- Dockerfile layering keeps stable base/apt layers ahead of volatile build args; build args are declared near consuming layers to preserve cache reuse.
 
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
