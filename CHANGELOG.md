@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.7] - 2026-05-02
+
+- Added an optional Playwright runtime image build flag so operators can include Playwright dependencies only when needed.
+- Updated release metadata, documentation, and tests to cover the new Playwright build-path behavior and rebuild/version-discipline expectations.
+
 ## [0.1.6] - 2026-03-03
 
 - Defaulted `OPENCODE_WEB_YOLO_REPO` to `laurenceputra/opencode_web_yolo` so managed installs can resolve remote version checks without requiring manual repo configuration.
