@@ -53,6 +53,7 @@ opencode_web_yolo [wrapper_flags] [-- opencode_web_args...]
 Wrapper flags:
 - `--pull`
 - `--no-pull`
+- `--playwright`
 - `--agents-file <host-path>`
 - `--no-host-agents`
 - `--dry-run`
@@ -109,6 +110,7 @@ Operator-facing settings:
 | `OPENCODE_WEB_YOLO_IMAGE` | `opencode_web_yolo:latest` | Docker image tag the wrapper builds and runs. |
 | `OPENCODE_WEB_BASE_IMAGE` | `node:22-slim` | Base image used when rebuilding the runtime image. |
 | `OPENCODE_WEB_NPM_PACKAGE` | `opencode-ai` | npm package installed in the runtime image for the OpenCode CLI. |
+| `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` to install Playwright CLI globally and preinstall Chromium into shared runtime path (`/ms-playwright`). |
 
 ## Persistence Paths
 
@@ -169,7 +171,7 @@ mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f
 Force-refresh image to latest OpenCode version:
 
 ```bash
-docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
+docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=0 -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
 
 ## Reverse Proxy (Nginx)

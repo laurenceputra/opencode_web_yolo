@@ -69,10 +69,13 @@ Docker image includes:
 - `openssh-client`
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - OpenCode CLI (`opencode-ai` npm package by default)
+- when Playwright build is enabled: global `playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+- Dockerfile layering keeps stable base/apt layers ahead of volatile build args; build args are declared near consuming layers to preserve cache reuse.
 
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
+- `/opt/opencode-web-yolo-playwright`
 - `/app/AGENTS.md` (packaged fallback document)
 
 Entrypoint behavior:
@@ -114,6 +117,7 @@ Image rebuild happens when any trigger is true:
 - image tag missing locally
 - wrapper version metadata mismatch
 - OpenCode version metadata mismatch (unless version check disabled)
+- Playwright build metadata mismatch
 - pull/no-cache build flags requested
 
 OpenCode install target during build:
@@ -122,6 +126,7 @@ OpenCode install target during build:
 
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
+- `--playwright` or `OPENCODE_WEB_BUILD_PLAYWRIGHT=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
 - `OPENCODE_WEB_SKIP_VERSION_CHECK=1`
 

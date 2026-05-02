@@ -3,7 +3,7 @@ _opencode_web_yolo_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   local opts
-  opts="--pull --no-pull --detach -d --foreground -f --mount-ssh -gh --gh --health diagnostics health config --version version --verbose -v --help -h help --"
+  opts="--pull --no-pull --playwright --detach -d --foreground -f --mount-ssh -gh --gh --health diagnostics health config --version version --verbose -v --help -h help --"
 
   COMPREPLY=($(compgen -W "${opts}" -- "${cur}"))
 }

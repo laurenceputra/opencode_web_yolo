@@ -35,6 +35,10 @@ case "\$1" in
       printf '%s\n' "1.2.11"
       exit 0
     fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright" >/dev/null 2>&1; then
+      printf '%s\n' "0"
+      exit 0
+    fi
     exit 0
     ;;
   ps)
@@ -65,14 +69,17 @@ export HOME="${TMP_DIR}/home"
 mkdir -p "${HOME}"
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=1
 export OPENCODE_WEB_BUILD_PULL=0
+export OPENCODE_WEB_BUILD_PLAYWRIGHT=1
 export OPENCODE_SERVER_PASSWORD="secret"
 
 output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
 
 assert_contains "$output" "OpenCode version mismatch (image='1.2.11', expected='1.2.15')"
+assert_contains "$output" "Playwright build mismatch (image='0', expected='1')"
 assert_contains "$output" "Building runtime image"
 
 build_invocation="$(tr -d '\n' <"${DOCKER_LOG}")"
 assert_contains "$build_invocation" "--build-arg OPENCODE_VERSION=1.2.15"
+assert_contains "$build_invocation" "--build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1"
 
 printf '%s\n' "PASS: wrapper builds with resolved expected OpenCode version"
