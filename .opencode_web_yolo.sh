@@ -204,6 +204,7 @@ Wrapper flags:
   --pull                 Force docker rebuild/pull behavior.
   --no-pull              Skip default pull-on-start behavior for this run.
   --playwright           Build runtime image with Playwright Chromium.
+  --wrangler             Build Wrangler and mount host Wrangler config read-write.
   --agents-file PATH     Mount a host AGENTS.md file read-only.
   --no-host-agents       Skip mounting host AGENTS.md.
   --dry-run              Print docker command and exit.
@@ -275,6 +276,7 @@ export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 export OPENCODE_WEB_RUN_DETACHED=1
 export OPENCODE_WEB_AUTO_PULL=1
 export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
+export OPENCODE_WEB_BUILD_WRANGLER=0
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=0
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 # Required: set a non-empty password before running the server.
@@ -291,7 +293,7 @@ EOF
 
 show_health() {
   local status=0
-  local image_wrapper_version image_opencode_version image_playwright
+  local image_wrapper_version image_opencode_version image_playwright image_wrangler
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local container_home_env container_xdg_config_env container_xdg_data_env container_xdg_state_env
 
@@ -314,6 +316,7 @@ show_health() {
   printf '%s\n' "  auto_pull=${OPENCODE_WEB_AUTO_PULL}"
   printf '%s\n' "  build_pull=${OPENCODE_WEB_BUILD_PULL}"
   printf '%s\n' "  build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
+  printf '%s\n' "  build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
@@ -338,9 +341,11 @@ show_health() {
     image_wrapper_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-version 2>/dev/null || true)"
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
     image_playwright="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright 2>/dev/null || true)"
+    image_wrangler="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-wrangler 2>/dev/null || true)"
     printf '%s\n' "  image_wrapper_version=${image_wrapper_version:-unknown}"
     printf '%s\n' "  image_opencode_version=${image_opencode_version:-unknown}"
     printf '%s\n' "  image_build_playwright=${image_playwright:-unknown}"
+    printf '%s\n' "  image_build_wrangler=${image_wrangler:-unknown}"
   else
     printf '%s\n' "  image_present=no"
   fi
@@ -430,6 +435,7 @@ build_image() {
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
     --build-arg "OPENCODE_VERSION=${build_opencode_version}"
     --build-arg "OPENCODE_WEB_BUILD_PLAYWRIGHT=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
+    --build-arg "OPENCODE_WEB_BUILD_WRANGLER=${OPENCODE_WEB_BUILD_WRANGLER}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"
     "${SCRIPT_DIR}"
   )
@@ -439,7 +445,7 @@ build_image() {
 }
 
 ensure_image() {
-  local expected_opencode_version image_wrapper_version image_opencode_version image_playwright
+  local expected_opencode_version image_wrapper_version image_opencode_version image_playwright image_wrangler
   local -a reasons
 
   reasons=()
@@ -471,6 +477,11 @@ ensure_image() {
     image_playwright="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright 2>/dev/null || true)"
     if [ "$image_playwright" != "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" ]; then
       reasons+=("Playwright build mismatch (image='${image_playwright:-missing}', expected='${OPENCODE_WEB_BUILD_PLAYWRIGHT}')")
+    fi
+
+    image_wrangler="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-wrangler 2>/dev/null || true)"
+    if [ "$image_wrangler" != "${OPENCODE_WEB_BUILD_WRANGLER}" ]; then
+      reasons+=("Wrangler build mismatch (image='${image_wrangler:-missing}', expected='${OPENCODE_WEB_BUILD_WRANGLER}')")
     fi
   fi
 
@@ -543,18 +554,20 @@ prepare_runtime_container() {
 }
 
 main() {
-  local mode use_gh mount_ssh
+  local mode use_gh mount_ssh use_wrangler
   local host_agents_enabled host_agents_source host_agents_path
   local host_agents_container_path host_agents_opencode_path
   local host_agents_codex_path host_agents_copilot_path host_agents_claude_path
   local host_agents_log host_agents_disabled
   local gh_host_config_dir
+  local wrangler_host_config_dir
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local -a passthrough docker_args app_cmd docker_cmd
 
   mode="run"
   use_gh=0
   mount_ssh=0
+  use_wrangler=0
   passthrough=()
   host_agents_enabled=1
   host_agents_source=""
@@ -583,6 +596,10 @@ main() {
         ;;
       --playwright)
         OPENCODE_WEB_BUILD_PLAYWRIGHT=1
+        ;;
+      --wrangler)
+        OPENCODE_WEB_BUILD_WRANGLER=1
+        use_wrangler=1
         ;;
       --agents-file=*)
         host_agents_enabled=1
@@ -725,6 +742,13 @@ main() {
     fi
   fi
 
+  if [ "$use_wrangler" -eq 1 ]; then
+    wrangler_host_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler"
+    [ -d "$wrangler_host_config_dir" ] || die "--wrangler requested but host Wrangler config directory does not exist at ${wrangler_host_config_dir}."
+    warn "Mounting host Wrangler config read-write. Container processes can read, modify, and rotate your Cloudflare credentials; only use --wrangler with trusted code."
+    docker_args+=(-v "${wrangler_host_config_dir}:${OPENCODE_WEB_YOLO_HOME}/.config/.wrangler:rw")
+  fi
+
   if [ "$host_agents_enabled" -eq 1 ]; then
     if [ -z "$host_agents_source" ]; then
       if [ -n "${OPENCODE_HOST_AGENTS:-}" ]; then
@@ -791,6 +815,7 @@ main() {
     printf '%s\n' "auto_pull=${OPENCODE_WEB_AUTO_PULL}"
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
     printf '%s\n' "build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
+    printf '%s\n' "build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
     printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
     printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"
     printf '%s\n' "runtime_env_home=${runtime_home}"

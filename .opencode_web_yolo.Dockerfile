@@ -31,11 +31,17 @@ RUN if [ "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" = "1" ]; then \
       && chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}"; \
     fi
 
+ARG OPENCODE_WEB_BUILD_WRANGLER=0
+RUN if [ "${OPENCODE_WEB_BUILD_WRANGLER}" = "1" ]; then \
+      npm install -g wrangler@latest; \
+    fi
+
 ARG WRAPPER_VERSION=0.0.0
 RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version \
-  && printf '%s\n' "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" >/opt/opencode-web-yolo-playwright
+  && printf '%s\n' "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" >/opt/opencode-web-yolo-playwright \
+  && printf '%s\n' "${OPENCODE_WEB_BUILD_WRANGLER}" >/opt/opencode-web-yolo-wrangler
 
 RUN cat <<'EOF' >/app/AGENTS.md
 # opencode_web_yolo fallback instructions

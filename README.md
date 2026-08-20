@@ -54,6 +54,7 @@ Wrapper flags:
 - `--pull`
 - `--no-pull`
 - `--playwright`
+- `--wrangler`
 - `--agents-file <host-path>`
 - `--no-host-agents`
 - `--dry-run`
@@ -111,6 +112,7 @@ Operator-facing settings:
 | `OPENCODE_WEB_BASE_IMAGE` | `node:22-slim` | Base image used when rebuilding the runtime image. |
 | `OPENCODE_WEB_NPM_PACKAGE` | `opencode-ai` | npm package installed in the runtime image for the OpenCode CLI. |
 | `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` to install Playwright CLI globally and preinstall Chromium into shared runtime path (`/ms-playwright`). |
+| `OPENCODE_WEB_BUILD_WRANGLER` | `0` | Set to `1` to install `wrangler@latest` globally in the runtime image. `--wrangler` enables this and mounts host Wrangler config for the run. |
 
 ## Persistence Paths
 
@@ -252,6 +254,10 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
   - Sets `GIT_CONFIG_GLOBAL=/home/opencode/.gitconfig` so git clients resolve the mounted config consistently.
   - Entrypoint also pins runtime user home resolution to `/home/opencode` for SSH/git consistency.
   - Wrapper prints a warning and recommends least-privilege credentials.
+- `--wrangler`:
+  - Requires `${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler` to already exist.
+  - Mounts it read-write at `/home/opencode/.config/.wrangler`; it is never mounted by default.
+  - Container processes can read, modify, and rotate Cloudflare credentials. Use only with trusted code.
 - Host instruction-file mount:
   - Wrapper resolves one file using the documented fallback chain and mounts it read-only to `/home/opencode/.config/opencode/AGENTS.md`.
   - `--agents-file` and `OPENCODE_HOST_AGENTS` override all defaults.

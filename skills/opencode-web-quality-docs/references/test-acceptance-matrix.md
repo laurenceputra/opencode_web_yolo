@@ -16,6 +16,7 @@ Use this matrix when authoring tests under `tests/`.
 - Image contains `gh`, `git`, `ssh` binaries.
 - `-gh` validates host `gh` install/auth and applies gh mount behavior.
 - `--mount-ssh` warns and mounts only on explicit request.
+- `--wrangler` requires an existing host `.wrangler` directory, warns about read-write Cloudflare credential exposure, mounts the exact `:rw` path only when requested, and remains absent by default.
 - Startup path remains functional when `-gh` and/or `--mount-ssh` are enabled (no read-only mount ownership failures).
 - Provider state persists across restart when config/data mount contracts are present.
 - Persistence assertions verify state files are written to mounted host path, not only any in-container path.

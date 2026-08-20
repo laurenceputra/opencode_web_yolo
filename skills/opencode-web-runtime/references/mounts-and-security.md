@@ -24,6 +24,13 @@ Use this file when modifying mount behavior or auth-context handling.
 - Emit explicit warning before mount.
 - Recommend minimizing blast radius (least privilege, branch protection, short-lived credentials).
 
+## Optional `--wrangler` Mount
+
+- Require `${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler` to exist before enabling.
+- Mount it explicitly read-write at `${OPENCODE_WEB_YOLO_HOME}/.config/.wrangler`.
+- Emit a strong warning that container processes can read, modify, and rotate Cloudflare credentials.
+- Never mount Wrangler config by default; this is an explicit read-write credential exception.
+
 ## Entrypoint Ownership Safety
 
 - Do not recursively `chown` broad parent paths that can include read-only mount points.
@@ -40,4 +47,5 @@ Use this file when modifying mount behavior or auth-context handling.
 
 - Do not mount `~/.ssh` by default.
 - Do not mount gh auth/config by default.
+- Do not mount Wrangler config by default; `--wrangler` is the only enabling path.
 - Do not skip password checks when sensitive mounts are requested.

@@ -60,6 +60,11 @@ Mount model:
   - Mounts `${HOME}/.ssh` (ro) only on explicit request and prints warning.
   - Also mounts `${HOME}/.gitconfig` (ro) when present.
   - Exports `GIT_CONFIG_GLOBAL=${OPENCODE_WEB_YOLO_HOME}/.gitconfig` when mounted to avoid home-resolution drift.
+- Optional `--wrangler`:
+  - Requires `${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler` to exist.
+  - Mounts it explicitly read-write to `${OPENCODE_WEB_YOLO_HOME}/.config/.wrangler`.
+  - Prints a strong warning because container processes can read, modify, and rotate Cloudflare credentials.
+  - Never mounts Wrangler config by default.
 
 ## Image Contents and Entrypoint
 
@@ -70,12 +75,14 @@ Docker image includes:
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - OpenCode CLI (`opencode-ai` npm package by default)
 - when Playwright build is enabled: global `playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+- when Wrangler build is enabled: global `wrangler@latest` CLI
 - Dockerfile layering keeps stable base/apt layers ahead of volatile build args; build args are declared near consuming layers to preserve cache reuse.
 
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
 - `/opt/opencode-web-yolo-playwright`
+- `/opt/opencode-web-yolo-wrangler`
 - `/app/AGENTS.md` (packaged fallback document)
 
 Entrypoint behavior:
@@ -118,6 +125,7 @@ Image rebuild happens when any trigger is true:
 - wrapper version metadata mismatch
 - OpenCode version metadata mismatch (unless version check disabled)
 - Playwright build metadata mismatch
+- Wrangler build metadata mismatch
 - pull/no-cache build flags requested
 
 OpenCode install target during build:
@@ -127,6 +135,7 @@ OpenCode install target during build:
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
 - `--playwright` or `OPENCODE_WEB_BUILD_PLAYWRIGHT=1`
+- `--wrangler` or `OPENCODE_WEB_BUILD_WRANGLER=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
 - `OPENCODE_WEB_SKIP_VERSION_CHECK=1`
 
@@ -146,6 +155,7 @@ Tests and CI assert:
 - launch behavior replaces same-name containers by stopping running instances, then removing the old container before re-run.
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
+- `--wrangler` explicit read-write mount, warning, missing-directory failure, and disabled-by-default behavior.
 - health output includes persistence/lifecycle settings.
 - health output includes browser-vs-server persistence scope visibility.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
