@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.9] - 2026-08-20
+
+- Added explicit `--wrangler` support for an optional Wrangler-enabled image and read-write host Wrangler config mount, with credential-risk warnings.
+
 ## [0.1.8] - 2026-05-02
 
 - Optimized Dockerfile layer ordering/caching for Playwright-enabled runtime builds to improve rebuild efficiency without changing runtime behavior.

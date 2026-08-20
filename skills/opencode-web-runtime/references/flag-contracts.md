@@ -8,6 +8,7 @@ Use this file when adding or changing wrapper CLI behavior.
 - Wrapper flags:
   - `--pull`
   - `--mount-ssh`
+  - `--wrangler`
   - `-gh`, `--gh`
   - `health`, `--health`, `diagnostics`
   - `config`
@@ -20,6 +21,9 @@ Use this file when adding or changing wrapper CLI behavior.
 - Preserve pass-through args for OpenCode web command.
 - Require an explicit separator strategy so wrapper flags do not leak into app args.
 - Keep command behavior deterministic for both dry-run and run paths.
+- `--wrangler` must set `OPENCODE_WEB_BUILD_WRANGLER=1`, require the host
+  `${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler` directory, and mount it as
+  `${OPENCODE_WEB_YOLO_HOME}/.config/.wrangler:rw` only for that run.
 
 ## Verification Expectations
 

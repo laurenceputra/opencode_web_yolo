@@ -27,8 +27,8 @@ chmod +x "${FAKE_BIN}/gh"
 
 export PATH="${FAKE_BIN}:${PATH}"
 export HOME="${TMP_DIR}/home"
-export XDG_CONFIG_HOME="${HOME}/.config"
-mkdir -p "${HOME}/.config/gh" "${HOME}/.ssh"
+export XDG_CONFIG_HOME="${HOME}/custom-xdg-config"
+mkdir -p "${XDG_CONFIG_HOME}/gh" "${XDG_CONFIG_HOME}/.wrangler" "${HOME}/.ssh"
 printf '%s\n' "[user]" >"${HOME}/.gitconfig"
 export OPENCODE_WEB_DRY_RUN=1
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=1
@@ -55,7 +55,26 @@ assert_contains "$output_ssh" ".gitconfig:/home/opencode/.gitconfig:ro"
 assert_contains "$output_ssh" "-e GIT_CONFIG_GLOBAL=/home/opencode/.gitconfig"
 
 output_default="$("${ROOT_DIR}/.opencode_web_yolo.sh" 2>&1)"
+assert_not_contains "$output_default" "${XDG_CONFIG_HOME}/.wrangler:/home/opencode/.config/.wrangler:rw"
+assert_not_contains "$output_default" "WARNING: Mounting host Wrangler config"
+
+output_wrangler="$("${ROOT_DIR}/.opencode_web_yolo.sh" --wrangler 2>&1)"
+assert_contains "$output_wrangler" "Cloudflare credentials"
+assert_contains "$output_wrangler" "${XDG_CONFIG_HOME}/.wrangler:/home/opencode/.config/.wrangler:rw"
+assert_contains "$output_wrangler" "build_wrangler=1"
+
+rm -rf "${XDG_CONFIG_HOME}/.wrangler"
+set +e
+output_wrangler_fail="$("${ROOT_DIR}/.opencode_web_yolo.sh" --wrangler 2>&1)"
+status=$?
+set -e
+if [ "$status" -eq 0 ]; then
+  fail "expected --wrangler to fail when host Wrangler config is missing"
+fi
+assert_contains "$output_wrangler_fail" "host Wrangler config directory does not exist at ${XDG_CONFIG_HOME}/.wrangler"
+
 assert_not_contains "$output_default" ".gitconfig:/home/opencode/.gitconfig:ro"
 assert_not_contains "$output_default" "-e GIT_CONFIG_GLOBAL=/home/opencode/.gitconfig"
+assert_not_contains "$output_default" "Cloudflare credentials"
 
 printf '%s\n' "PASS: sensitive mount behavior"
