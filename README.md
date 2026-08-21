@@ -32,6 +32,7 @@ Defaults:
 - Bind/publish: `127.0.0.1:4096:4096`
 - OpenCode web host inside container: `0.0.0.0`
 - OpenCode package install target: `latest` at build time
+- Playwright build: disabled by default; opt in with `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config or `--playwright` for one run
 - Container name: `opencode_web_yolo`
 - Restart policy: `unless-stopped`
 - Launch mode: background (`-d`)
@@ -53,7 +54,7 @@ opencode_web_yolo [wrapper_flags] [-- opencode_web_args...]
 Wrapper flags:
 - `--pull`
 - `--no-pull`
-- `--playwright`
+- `--playwright` (one-shot Playwright build opt-in)
 - `--wrangler`
 - `--agents-file <host-path>`
 - `--no-host-agents`
@@ -105,14 +106,27 @@ Operator-facing settings:
 | `OPENCODE_WEB_YOLO_REPO` | `laurenceputra/opencode_web_yolo` | GitHub repo used for wrapper self-update checks and bootstrap downloads. |
 | `OPENCODE_WEB_YOLO_BRANCH` | `main` | Branch used with `OPENCODE_WEB_YOLO_REPO` for update checks and bootstrap downloads. |
 | `OPENCODE_WEB_SKIP_UPDATE_CHECK` | `0` | Set to `1` to skip the wrapper's remote `VERSION` check and self-update flow. |
-| `OPENCODE_WEB_SKIP_VERSION_CHECK` | `0` | Set to `1` to skip OpenCode version drift checks when deciding whether to rebuild the image. |
+| `OPENCODE_WEB_SKIP_VERSION_CHECK` | `0` | Set to `1` to skip remote npm lookups and OpenCode/enabled-Playwright package version drift checks when deciding whether to rebuild; explicit Playwright pins still apply. |
 | `OPENCODE_WEB_CONFIG_DIR` | `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` | Host OpenCode config directory mounted into the container for persistent config and rules. |
 | `OPENCODE_WEB_DATA_DIR` | `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` | Host OpenCode data directory mounted into the container for persistent sessions, provider auth, and state. |
 | `OPENCODE_WEB_YOLO_IMAGE` | `opencode_web_yolo:latest` | Docker image tag the wrapper builds and runs. |
 | `OPENCODE_WEB_BASE_IMAGE` | `node:22-slim` | Base image used when rebuilding the runtime image. |
 | `OPENCODE_WEB_NPM_PACKAGE` | `opencode-ai` | npm package installed in the runtime image for the OpenCode CLI. |
-| `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` to install Playwright CLI globally and preinstall Chromium into shared runtime path (`/ms-playwright`). |
+| `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` in `~/.opencode_web_yolo/config` for durable Playwright enablement; `--playwright` enables it for one run and preinstalls Chromium into `/ms-playwright`. |
+| `OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION` | none | Optional exact `@playwright/test` install pin. It remains the Docker build target when `OPENCODE_WEB_SKIP_VERSION_CHECK=1`; that skip suppresses npm lookup and installed-version drift comparison, but does not discard the explicit pin. When no pin is set, an enabled build resolves npm unless checks are skipped, then uses the deterministic `1.62.1` fallback. |
 | `OPENCODE_WEB_BUILD_WRANGLER` | `0` | Set to `1` to install `wrangler@latest` globally in the runtime image. `--wrangler` enables this and mounts host Wrangler config for the run. |
+
+### Playwright runtime
+
+Playwright is intentionally opt-in because its Chromium browser and Linux dependencies make the image substantially larger. To keep it enabled across runs, edit the generated config and set:
+
+```bash
+export OPENCODE_WEB_BUILD_PLAYWRIGHT=1
+```
+
+Use `--playwright` instead when the build should be enabled only for that invocation. The enabled image installs the global `@playwright/test` package at an explicit version, runs that package's `playwright install --with-deps chromium`, and stores the expected and installed versions in image metadata. The global CLI is a convenience for runtime diagnostics and commands; arbitrary mounted projects should still declare `@playwright/test` locally for normal Node.js imports and project dependency resolution.
+
+Truthful toggle values such as `true`, `yes`, and `on` are accepted and normalized to `1` before image build arguments and metadata comparisons. `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips remote version lookup and package-version drift checks only; Playwright build enablement and explicit install pins still apply.
 
 ## Persistence Paths
 
@@ -170,10 +184,12 @@ Run in background (with automatic startup on reboot):
 mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD='change-me-now' -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode web --hostname 0.0.0.0 --port 4096
 ```
 
-Force-refresh image to latest OpenCode version:
+Force-refresh image to the resolved latest OpenCode and Playwright versions:
 
 ```bash
-docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION=latest --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=0 -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
+OPENCODE_VERSION="$(npm view opencode-ai version)"
+PLAYWRIGHT_VERSION="$(npm view @playwright/test version)"
+docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION="${OPENCODE_VERSION}" --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 --build-arg PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
 
 ## Reverse Proxy (Nginx)

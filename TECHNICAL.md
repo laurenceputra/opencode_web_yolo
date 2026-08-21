@@ -74,7 +74,9 @@ Docker image includes:
 - `openssh-client`
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - OpenCode CLI (`opencode-ai` npm package by default)
-- when Playwright build is enabled: global `playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+- when Playwright build is enabled: global `@playwright/test` package/`playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
+- the browser install is executed by that exact installed package, coupling the Chromium revision to the package version used for the image
+- the global package is not a substitute for project dependencies: mounted projects should declare `@playwright/test` locally for normal Node.js imports
 - when Wrangler build is enabled: global `wrangler@latest` CLI
 - Dockerfile layering keeps stable base/apt layers ahead of volatile build args; build args are declared near consuming layers to preserve cache reuse.
 
@@ -82,6 +84,8 @@ Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
 - `/opt/opencode-web-yolo-playwright`
+- `/opt/opencode-web-yolo-playwright-version` (installed package version, or `disabled`)
+- `/opt/opencode-web-yolo-playwright-expected-version` (Docker build arg version)
 - `/opt/opencode-web-yolo-wrangler`
 - `/app/AGENTS.md` (packaged fallback document)
 
@@ -125,6 +129,7 @@ Image rebuild happens when any trigger is true:
 - wrapper version metadata mismatch
 - OpenCode version metadata mismatch (unless version check disabled)
 - Playwright build metadata mismatch
+- Playwright package version metadata mismatch when the Playwright build is enabled (unless version check disabled)
 - Wrangler build metadata mismatch
 - pull/no-cache build flags requested
 
@@ -135,9 +140,10 @@ OpenCode install target during build:
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
 - `--playwright` or `OPENCODE_WEB_BUILD_PLAYWRIGHT=1`
+- `PLAYWRIGHT_VERSION` is an explicit Docker build arg (default `1.62.1`); the wrapper resolves the current `@playwright/test` version before an enabled build unless `OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION` is set. An explicit expected version remains the install target when version checks are skipped.
 - `--wrangler` or `OPENCODE_WEB_BUILD_WRANGLER=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
-- `OPENCODE_WEB_SKIP_VERSION_CHECK=1`
+- `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips npm lookup and OpenCode/Playwright package-version drift comparisons, but does not disable enabled builds or discard an explicit Playwright pin. Truthy build toggles (`true`, `yes`, `on`) are normalized to `0`/`1` before Docker args and metadata comparisons.
 
 ## Release Checklist
 

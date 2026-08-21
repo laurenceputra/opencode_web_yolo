@@ -22,12 +22,21 @@ if [ -f "$WRAPPER_VERSION_FILE" ]; then
 fi
 
 VERBOSE="${OPENCODE_WEB_VERBOSE}"
+PLAYWRIGHT_DEFAULT_VERSION="1.62.1"
 
 is_true() {
   case "${1:-0}" in
     1|true|TRUE|yes|YES|on|ON) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+normalize_bool() {
+  if is_true "${1:-0}"; then
+    printf '%s\n' 1
+  else
+    printf '%s\n' 0
+  fi
 }
 
 log() {
@@ -276,6 +285,9 @@ export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 export OPENCODE_WEB_RUN_DETACHED=1
 export OPENCODE_WEB_AUTO_PULL=1
 export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
+# Set OPENCODE_WEB_BUILD_PLAYWRIGHT=1 here to persist the Playwright build.
+# This explicit pin remains effective even when version checks are skipped.
+# export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=1.62.1
 export OPENCODE_WEB_BUILD_WRANGLER=0
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=0
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
@@ -293,7 +305,7 @@ EOF
 
 show_health() {
   local status=0
-  local image_wrapper_version image_opencode_version image_playwright image_wrangler
+  local image_wrapper_version image_opencode_version image_playwright image_playwright_version image_playwright_expected_version image_wrangler
   local runtime_home runtime_xdg_config runtime_xdg_data runtime_xdg_state
   local container_home_env container_xdg_config_env container_xdg_data_env container_xdg_state_env
 
@@ -341,10 +353,14 @@ show_health() {
     image_wrapper_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-version 2>/dev/null || true)"
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
     image_playwright="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright 2>/dev/null || true)"
+    image_playwright_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright-version 2>/dev/null || true)"
+    image_playwright_expected_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright-expected-version 2>/dev/null || true)"
     image_wrangler="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-wrangler 2>/dev/null || true)"
     printf '%s\n' "  image_wrapper_version=${image_wrapper_version:-unknown}"
     printf '%s\n' "  image_opencode_version=${image_opencode_version:-unknown}"
     printf '%s\n' "  image_build_playwright=${image_playwright:-unknown}"
+    printf '%s\n' "  image_playwright_version=${image_playwright_version:-unknown}"
+    printf '%s\n' "  image_playwright_expected_version=${image_playwright_expected_version:-unknown}"
     printf '%s\n' "  image_build_wrangler=${image_wrangler:-unknown}"
   else
     printf '%s\n' "  image_present=no"
@@ -409,8 +425,43 @@ resolve_expected_opencode_version() {
   npm view "${OPENCODE_WEB_NPM_PACKAGE}" version --json 2>/dev/null | tr -d '"' | tr -d '[:space:]'
 }
 
+resolve_expected_playwright_version() {
+  local resolved_version
+
+  if ! is_true "${OPENCODE_WEB_BUILD_PLAYWRIGHT}"; then
+    return 0
+  fi
+
+  if [ -n "${OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION:-}" ]; then
+    printf '%s\n' "${OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION}"
+    return 0
+  fi
+
+  if is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}"; then
+    debug "Skipping Playwright npm version check."
+    return 0
+  fi
+
+  if [ -n "${OPENCODE_WEB_PLAYWRIGHT_VERSION:-}" ]; then
+    printf '%s\n' "${OPENCODE_WEB_PLAYWRIGHT_VERSION}"
+    return 0
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    if resolved_version="$(npm view @playwright/test version --json 2>/dev/null | tr -d '"' | tr -d '[:space:]')" && [ -n "$resolved_version" ]; then
+      printf '%s\n' "$resolved_version"
+      return 0
+    fi
+    warn "npm could not resolve the latest @playwright/test version; using pinned fallback ${PLAYWRIGHT_DEFAULT_VERSION}."
+  else
+    warn "npm is not available; using pinned fallback ${PLAYWRIGHT_DEFAULT_VERSION} for Playwright version checks."
+  fi
+
+  printf '%s\n' "${PLAYWRIGHT_DEFAULT_VERSION}"
+}
+
 build_image() {
-  local requested_opencode_version build_opencode_version
+  local requested_opencode_version requested_playwright_version build_opencode_version build_playwright_version
   local -a build_cmd
 
   requested_opencode_version="${1:-}"
@@ -420,6 +471,9 @@ build_image() {
   elif [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
     build_opencode_version="${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
   fi
+
+  requested_playwright_version="${2:-}"
+  build_playwright_version="${requested_playwright_version:-${OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION:-${OPENCODE_WEB_PLAYWRIGHT_VERSION:-${PLAYWRIGHT_DEFAULT_VERSION}}}}"
 
   build_cmd=(docker build -f "${SCRIPT_DIR}/.opencode_web_yolo.Dockerfile")
   if is_true "${OPENCODE_WEB_BUILD_PULL}"; then
@@ -435,21 +489,23 @@ build_image() {
     --build-arg "OPENCODE_NPM_PACKAGE=${OPENCODE_WEB_NPM_PACKAGE}"
     --build-arg "OPENCODE_VERSION=${build_opencode_version}"
     --build-arg "OPENCODE_WEB_BUILD_PLAYWRIGHT=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
+    --build-arg "PLAYWRIGHT_VERSION=${build_playwright_version}"
     --build-arg "OPENCODE_WEB_BUILD_WRANGLER=${OPENCODE_WEB_BUILD_WRANGLER}"
     -t "${OPENCODE_WEB_YOLO_IMAGE}"
     "${SCRIPT_DIR}"
   )
 
-  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE} (opencode=${build_opencode_version})."
+  log "Building runtime image ${OPENCODE_WEB_YOLO_IMAGE} (opencode=${build_opencode_version}, playwright=${build_playwright_version})."
   "${build_cmd[@]}"
 }
 
 ensure_image() {
-  local expected_opencode_version image_wrapper_version image_opencode_version image_playwright image_wrangler
+  local expected_opencode_version expected_playwright_version image_wrapper_version image_opencode_version image_playwright image_playwright_version image_wrangler
   local -a reasons
 
   reasons=()
   expected_opencode_version="$(resolve_expected_opencode_version || true)"
+  expected_playwright_version="$(resolve_expected_playwright_version || true)"
 
   if ! docker image inspect "${OPENCODE_WEB_YOLO_IMAGE}" >/dev/null 2>&1; then
     reasons+=("image '${OPENCODE_WEB_YOLO_IMAGE}' is missing")
@@ -479,6 +535,13 @@ ensure_image() {
       reasons+=("Playwright build mismatch (image='${image_playwright:-missing}', expected='${OPENCODE_WEB_BUILD_PLAYWRIGHT}')")
     fi
 
+    if ! is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}" && is_true "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" && [ -n "$expected_playwright_version" ]; then
+      image_playwright_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-playwright-version 2>/dev/null || true)"
+      if [ "$image_playwright_version" != "$expected_playwright_version" ]; then
+        reasons+=("Playwright version mismatch (image='${image_playwright_version:-missing}', expected='${expected_playwright_version}')")
+      fi
+    fi
+
     image_wrangler="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-web-yolo-wrangler 2>/dev/null || true)"
     if [ "$image_wrangler" != "${OPENCODE_WEB_BUILD_WRANGLER}" ]; then
       reasons+=("Wrangler build mismatch (image='${image_wrangler:-missing}', expected='${OPENCODE_WEB_BUILD_WRANGLER}')")
@@ -494,7 +557,7 @@ ensure_image() {
   for reason in "${reasons[@]}"; do
     log "  - ${reason}"
   done
-  build_image "$expected_opencode_version"
+  build_image "$expected_opencode_version" "$expected_playwright_version"
 }
 
 require_password() {
@@ -656,6 +719,15 @@ main() {
     esac
     shift
   done
+
+  OPENCODE_WEB_BUILD_PULL="$(normalize_bool "${OPENCODE_WEB_BUILD_PULL}")"
+  OPENCODE_WEB_BUILD_NO_CACHE="$(normalize_bool "${OPENCODE_WEB_BUILD_NO_CACHE}")"
+  OPENCODE_WEB_BUILD_PLAYWRIGHT="$(normalize_bool "${OPENCODE_WEB_BUILD_PLAYWRIGHT}")"
+  OPENCODE_WEB_BUILD_WRANGLER="$(normalize_bool "${OPENCODE_WEB_BUILD_WRANGLER}")"
+  OPENCODE_WEB_AUTO_PULL="$(normalize_bool "${OPENCODE_WEB_AUTO_PULL}")"
+  OPENCODE_WEB_RUN_DETACHED="$(normalize_bool "${OPENCODE_WEB_RUN_DETACHED}")"
+  OPENCODE_WEB_SKIP_UPDATE_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_UPDATE_CHECK}")"
+  OPENCODE_WEB_SKIP_VERSION_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_VERSION_CHECK}")"
 
   case "$mode" in
     version)

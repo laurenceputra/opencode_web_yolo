@@ -95,6 +95,14 @@ case "\$1" in
       printf '%s\n' "1.2.6"
       exit 0
     fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright-version" >/dev/null 2>&1; then
+      printf '%s\n' "disabled"
+      exit 0
+    fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright-expected-version" >/dev/null 2>&1; then
+      printf '%s\n' "1.62.1"
+      exit 0
+    fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright" >/dev/null 2>&1; then
       printf '%s\n' "0"
       exit 0

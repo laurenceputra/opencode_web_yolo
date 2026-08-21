@@ -18,6 +18,7 @@ jobs:
           bash -n install.sh
           bash -n tests/test_helpers.sh
           bash -n tests/test_dry_run.sh
+          bash -n tests/test_build_expected_version.sh
           bash -n tests/test_launch_mode_flags.sh
           bash -n tests/test_container_replace.sh
           bash -n tests/wrapper-dryrun.sh
@@ -27,6 +28,7 @@ jobs:
           bash -n tests/test_entrypoint_home_pin.sh
           bash -n tests/test_docs_apache_endpoints.sh
           bash -n tests/test_help.sh
+          bash -n tests/test_playwright_dockerfile_contract.sh
           bash -n tests/test_version_command.sh
           bash -n tests/test_self_update.sh
           bash -n tests/test_auth_required.sh
@@ -45,6 +47,7 @@ jobs:
           shellcheck install.sh
           shellcheck -x tests/test_helpers.sh
           shellcheck -x tests/test_dry_run.sh
+          shellcheck -x tests/test_build_expected_version.sh
           shellcheck -x tests/test_launch_mode_flags.sh
           shellcheck -x tests/test_container_replace.sh
           shellcheck -x tests/wrapper-dryrun.sh
@@ -54,6 +57,7 @@ jobs:
           shellcheck -x tests/test_entrypoint_home_pin.sh
           shellcheck -x tests/test_docs_apache_endpoints.sh
           shellcheck -x tests/test_help.sh
+          shellcheck -x tests/test_playwright_dockerfile_contract.sh
           shellcheck -x tests/test_version_command.sh
           shellcheck -x tests/test_self_update.sh
           shellcheck -x tests/test_auth_required.sh
@@ -97,6 +101,27 @@ jobs:
       - name: Validate required binaries
         run: |
           docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh'
+      - name: Build Playwright-enabled runtime image
+        run: |
+          docker build \
+            --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 \
+            --build-arg PLAYWRIGHT_VERSION=1.62.1 \
+            -f .opencode_web_yolo.Dockerfile \
+            -t opencode_web_yolo:ci-playwright .
+      - name: Validate Playwright runtime
+        run: |
+          docker run --rm --entrypoint sh opencode_web_yolo:ci-playwright -lc '
+            command -v playwright
+            test "$(printenv PLAYWRIGHT_BROWSERS_PATH)" = /ms-playwright
+            test "$(cat /opt/opencode-web-yolo-playwright)" = 1
+            test "$(cat /opt/opencode-web-yolo-playwright-version)" = 1.62.1
+            test "$(cat /opt/opencode-web-yolo-playwright-expected-version)" = 1.62.1
+            found=0
+            for executable in /ms-playwright/chromium-*/chrome-linux/chrome /ms-playwright/chromium-*/chrome-linux64/chrome; do
+              if test -x "$executable"; then found=1; fi
+            done
+            test "$found" = 1
+          '
 
   version-discipline:
     runs-on: ubuntu-latest
