@@ -442,11 +442,6 @@ resolve_expected_playwright_version() {
     return 0
   fi
 
-  if [ -n "${OPENCODE_WEB_PLAYWRIGHT_VERSION:-}" ]; then
-    printf '%s\n' "${OPENCODE_WEB_PLAYWRIGHT_VERSION}"
-    return 0
-  fi
-
   if command -v npm >/dev/null 2>&1; then
     if resolved_version="$(npm view @playwright/test version --json 2>/dev/null | tr -d '"' | tr -d '[:space:]')" && [ -n "$resolved_version" ]; then
       printf '%s\n' "$resolved_version"
@@ -473,7 +468,7 @@ build_image() {
   fi
 
   requested_playwright_version="${2:-}"
-  build_playwright_version="${requested_playwright_version:-${OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION:-${OPENCODE_WEB_PLAYWRIGHT_VERSION:-${PLAYWRIGHT_DEFAULT_VERSION}}}}"
+  build_playwright_version="${requested_playwright_version:-${OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION:-${PLAYWRIGHT_DEFAULT_VERSION}}}"
 
   build_cmd=(docker build -f "${SCRIPT_DIR}/.opencode_web_yolo.Dockerfile")
   if is_true "${OPENCODE_WEB_BUILD_PULL}"; then

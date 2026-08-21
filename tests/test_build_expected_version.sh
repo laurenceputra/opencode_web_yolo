@@ -123,6 +123,13 @@ if [ -s "${FAKE_NPM_LOG}" ]; then
 fi
 
 : >"${DOCKER_LOG}"
+unset OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION
+output_skip_fallback="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+assert_not_contains "$output_skip_fallback" "Playwright version mismatch"
+build_invocation_skip_fallback="$(tr -d '\n' <"${DOCKER_LOG}")"
+assert_contains "$build_invocation_skip_fallback" "--build-arg PLAYWRIGHT_VERSION=1.62.1"
+
+: >"${DOCKER_LOG}"
 unset OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION OPENCODE_WEB_SKIP_VERSION_CHECK
 export OPENCODE_WEB_AUTO_PULL=0
 export FAKE_IMAGE_OPENCODE_VERSION=1.2.15

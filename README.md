@@ -126,7 +126,7 @@ export OPENCODE_WEB_BUILD_PLAYWRIGHT=1
 
 Use `--playwright` instead when the build should be enabled only for that invocation. The enabled image installs the global `@playwright/test` package at an explicit version, runs that package's `playwright install --with-deps chromium`, and stores the expected and installed versions in image metadata. The global CLI is a convenience for runtime diagnostics and commands; arbitrary mounted projects should still declare `@playwright/test` locally for normal Node.js imports and project dependency resolution.
 
-Truthful toggle values such as `true`, `yes`, and `on` are accepted and normalized to `1` before image build arguments and metadata comparisons. `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips remote version lookup and package-version drift checks only; Playwright build enablement and explicit install pins still apply.
+Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized to `1` before image build arguments and metadata comparisons. `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips remote version lookup and package-version drift checks only; Playwright build enablement and explicit install pins still apply.
 
 ## Persistence Paths
 
