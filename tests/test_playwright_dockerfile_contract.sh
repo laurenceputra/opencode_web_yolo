@@ -24,13 +24,17 @@ assert_contains "$dockerfile_contents" "npm install -g wrangler@latest"
 assert_contains "$dockerfile_contents" "/opt/opencode-web-yolo-wrangler"
 
 line_arg_npm_package="$(grep -n '^ARG OPENCODE_NPM_PACKAGE=' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
+# shellcheck disable=SC2016 # Single quotes intentionally preserve literal Dockerfile shell syntax.
 line_npm_install="$(grep -n '^RUN npm install -g \"\${OPENCODE_NPM_PACKAGE}@\${OPENCODE_VERSION}\"$' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
 line_arg_playwright="$(grep -n '^ARG OPENCODE_WEB_BUILD_PLAYWRIGHT=' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
 line_arg_playwright_version="$(grep -n '^ARG PLAYWRIGHT_VERSION=' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
+# shellcheck disable=SC2016 # Single quotes intentionally preserve literal Dockerfile shell syntax.
 line_playwright_layer="$(grep -n '^RUN if \[ "\${OPENCODE_WEB_BUILD_PLAYWRIGHT}" = "1" \]; then \\$' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
 line_arg_wrangler="$(grep -n '^ARG OPENCODE_WEB_BUILD_WRANGLER=' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
+# shellcheck disable=SC2016 # Single quotes intentionally preserve literal Dockerfile shell syntax.
 line_wrangler_layer="$(grep -n '^RUN if \[ "\${OPENCODE_WEB_BUILD_WRANGLER}" = "1" \]; then \\$' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
 line_arg_wrapper_version="$(grep -n '^ARG WRAPPER_VERSION=' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
+# shellcheck disable=SC2016 # Single quotes intentionally preserve literal Dockerfile shell syntax.
 line_metadata_layer="$(grep -n '^RUN mkdir -p /opt /workspace "\${OPENCODE_WEB_YOLO_HOME}" /app \\$' "${ROOT_DIR}/.opencode_web_yolo.Dockerfile" | cut -d: -f1)"
 
 [ -n "$line_arg_npm_package" ] || fail "missing OPENCODE_NPM_PACKAGE arg declaration"
