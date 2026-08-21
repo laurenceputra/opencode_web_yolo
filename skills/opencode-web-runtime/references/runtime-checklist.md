@@ -29,6 +29,10 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - Use `gosu` handoff for final command execution.
 - Run OpenCode web with configured host and port.
 - Preserve provider/auth state across restart by mounting host OpenCode data directory.
+- Keep Playwright opt-in: `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config is durable, while `--playwright` is one-shot.
+- When enabled, install global `@playwright/test` at an explicit version, run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
+- Record installed/expected Playwright versions and rebuild when enabled-image metadata drifts.
+- Normalize accepted truthy build toggles to canonical `0`/`1` before Docker arguments and metadata comparisons; version-check skip suppresses lookup/drift comparison but preserves an explicit Playwright install pin.
 
 ## Exit Criteria
 

@@ -53,4 +53,23 @@ assert_contains "$output" ".config/opencode"
 assert_contains "$output" ".local/share/opencode"
 assert_contains "$output" "--model local"
 
+output_one_shot="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run --playwright 2>&1)"
+assert_contains "$output_one_shot" "build_playwright=1"
+
+if [ -e "${HOME}/.opencode_web_yolo/config" ]; then
+  fail "--playwright must not persist a config file"
+fi
+
+for truthy_value in true yes on; do
+  export OPENCODE_WEB_BUILD_PLAYWRIGHT="${truthy_value}"
+  output_truthy="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+  assert_contains "$output_truthy" "build_playwright=1"
+done
+unset OPENCODE_WEB_BUILD_PLAYWRIGHT
+
+mkdir -p "${HOME}/.opencode_web_yolo"
+printf '%s\n' 'export OPENCODE_WEB_BUILD_PLAYWRIGHT=true' >"${HOME}/.opencode_web_yolo/config"
+output_durable="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+assert_contains "$output_durable" "build_playwright=1"
+
 printf '%s\n' "PASS: dry-run contract"

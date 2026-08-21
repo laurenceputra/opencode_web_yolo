@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.10] - 2026-08-21
+
+- Made Playwright durability and version-pin behavior deterministic: truthy build toggles normalize to canonical metadata values, explicit Playwright pins remain effective when version checks are skipped, and matching image metadata no longer causes unnecessary rebuilds.
+
 ## [0.1.9] - 2026-08-20
 
 - Added explicit `--wrangler` support for an optional Wrangler-enabled image and read-write host Wrangler config mount, with credential-risk warnings.
