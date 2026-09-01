@@ -22,6 +22,9 @@ Use this matrix when authoring tests under `tests/`.
 - Persistence assertions verify state files are written to mounted host path, not only any in-container path.
 - Docs contract check ensures Apache stream endpoints include `/event` and `/global/event`, and excludes stale `/session/event`.
 - Health/diagnostics command reports key prerequisites and failures clearly.
+- Retention accepts both flag forms, honors config/flag precedence, rejects invalid values, and propagates dry-run state.
+- Retention tests cover cutoff/pagination/root filtering, active-session skips, serial deletion, API incompatibility/failure, marker success/failure/retry, and scheduler signal/exit behavior.
+- Retention tests cover complete cross-directory hierarchy mapping, active descendants/unknown IDs, stale root refreshes, status changes before deletion, DELETE-true-but-still-present direct-GET verification, request timeout, supported-version gating, future markers, invalid poll intervals, exact query/cursor use, and malformed responses.
 
 ## Test Design Rules
 

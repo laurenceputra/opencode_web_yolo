@@ -8,6 +8,7 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - Keep pass-through args unchanged after `--`.
 - Gate container startup on required auth checks.
 - Keep dry-run output faithful to the real docker invocation.
+- Include effective retention days/dry-run state and marker path in dry-run and health output.
 - Keep diagnostics callable without launching the app container.
 - Ensure dry-run and diagnostics include both OpenCode config and OpenCode data mount contracts.
 
@@ -30,6 +31,10 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - Run OpenCode web with configured host and port.
 - Preserve provider/auth state across restart by mounting host OpenCode data directory.
 - Keep Playwright opt-in: `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config is durable, while `--playwright` is one-shot.
+- Retention is opt-in with non-negative `OPENCODE_WEB_RETENTION_DAYS`; its scheduler starts only after authenticated health, runs as the mapped user, and persists a success marker under `XDG_STATE_HOME`.
+- Retention must use authenticated complete `/experimental/session` pagination, `/session/status` for every involved directory, direct `/session/:id` refresh/verification, and serial `DELETE /session/:id` calls; validate compatibility and fail closed without raw SQL/WAL/SHM mutation.
+- Map every listed session to a root across directories; block a mapped root when status reports a busy/retrying descendant, fail closed on unmapped active IDs or malformed hierarchies, refresh/recheck immediately before each delete, verify direct 404 before marker advancement, and reject unsafe equal-timestamp page boundaries. The API has no atomic delete-if-idle guarantee.
+- Validate positive worker fetch and scheduler poll timeouts; use `tini -s -g` for PID1 subreaping/group signal forwarding and preserve SIGINT semantics.
 - When enabled, install global `@playwright/test` at an explicit version, run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
 - Record installed/expected Playwright versions and rebuild when enabled-image metadata drifts.
 - Normalize accepted truthy build toggles to canonical `0`/`1` before Docker arguments and metadata comparisons; version-check skip suppresses lookup/drift comparison but preserves an explicit Playwright install pin.

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.1] - 2026-09-01
+
+- Hardened retention against cross-directory active descendants, stale root refreshes, stale DELETE responses, unsupported OpenCode versions, stalled APIs, unsafe pagination boundaries, signal/process-tree issues, and scheduler misconfiguration. Deletion verification now requires direct 404/not-found responses, and documentation explicitly records the API's residual delete-if-idle race.
+
+## [0.2.0] - 2026-09-01
+
+- Added optional weekly retention for inactive OpenCode root sessions, using the authenticated OpenCode API with persistent success-marker scheduling, active-session protection, dry-run support, and mapped-user lifecycle management.
+
 ## [0.1.10] - 2026-08-21
 
 - Made Playwright durability and version-pin behavior deterministic: truthy build toggles normalize to canonical metadata values, explicit Playwright pins remain effective when version checks are skipped, and matching image metadata no longer causes unnecessary rebuilds.

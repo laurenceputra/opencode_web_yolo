@@ -18,6 +18,8 @@ assert_contains "$output_long" "--foreground, -f"
 assert_contains "$output_long" "--no-pull"
 assert_contains "$output_long" "--playwright"
 assert_contains "$output_long" "--wrangler"
+assert_contains "$output_long" "--retention-days N"
+assert_contains "$output_long" "--retention-days=N"
 assert_contains "$output_long" "opencode_web_yolo config"
 
 output_short="$("${ROOT_DIR}/.opencode_web_yolo.sh" -h 2>&1)"

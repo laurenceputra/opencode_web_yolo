@@ -37,6 +37,7 @@ Defaults:
 - Restart policy: `unless-stopped`
 - Launch mode: background (`-d`)
 - Pull behavior: pull-on-start enabled
+- Session retention: disabled by default (`OPENCODE_WEB_RETENTION_DAYS=0`)
 
 ## Authentication Requirement
 
@@ -56,6 +57,7 @@ Wrapper flags:
 - `--no-pull`
 - `--playwright` (one-shot Playwright build opt-in)
 - `--wrangler`
+- `--retention-days N` or `--retention-days=N` (0 disables weekly cleanup)
 - `--agents-file <host-path>`
 - `--no-host-agents`
 - `--dry-run`
@@ -115,6 +117,11 @@ Operator-facing settings:
 | `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` in `~/.opencode_web_yolo/config` for durable Playwright enablement; `--playwright` enables it for one run and preinstalls Chromium into `/ms-playwright`. |
 | `OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION` | none | Optional exact `@playwright/test` install pin. It remains the Docker build target when `OPENCODE_WEB_SKIP_VERSION_CHECK=1`; that skip suppresses npm lookup and installed-version drift comparison, but does not discard the explicit pin. When no pin is set, an enabled build resolves npm unless checks are skipped, then uses the deterministic `1.62.1` fallback. |
 | `OPENCODE_WEB_BUILD_WRANGLER` | `0` | Set to `1` to install `wrangler@latest` globally in the runtime image. `--wrangler` enables this and mounts host Wrangler config for the run. |
+| `OPENCODE_WEB_RETENTION_DAYS` | `0` | Non-negative number of days. After health succeeds, delete inactive root sessions older than this cutoff at most once per seven days. A flag overrides the configured value for that invocation. |
+| `OPENCODE_WEB_RETENTION_DRY_RUN` | `0` | Safely preview retention candidates without deleting or advancing the success marker. |
+| `OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS` | `10000` | Positive per-request worker timeout in milliseconds. Requests that stall fail closed. |
+| `OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS` | `10000` | Positive bounded deletion-verification timeout in milliseconds. |
+| `OPENCODE_WEB_RETENTION_POLL_SECONDS` | `3600` | Positive scheduler interval; values below one second are rejected. |
 
 ### Playwright runtime
 
@@ -136,6 +143,27 @@ Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized
 
 Provider auth/session state (for example OpenAI and GitHub Copilot links) persists across restarts from the OpenCode data path.
 The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`) to `/home/opencode` paths so app writes always land on mounted host directories.
+
+## Weekly session retention
+
+Enable cleanup in the generated config, or override it for one invocation:
+
+```bash
+export OPENCODE_WEB_RETENTION_DAYS=30
+opencode_web_yolo
+opencode_web_yolo --retention-days=14
+```
+
+The container starts OpenCode first, waits for authenticated `/global/health`, and then runs a lightweight scheduler as the mapped runtime user. The first enabled run is due immediately; later runs use the success marker at `$XDG_STATE_HOME/session-retention.last-success` and are no more frequent than once every seven days. Stopped containers do not lose schedule state, and failed runs do not advance the marker. The image uses `tini -s -g` as PID 1 for subreaping and signal-group forwarding.
+
+Cleanup first requires a healthy OpenCode `1.18.x` server, then uses OpenCode 1.18.25's experimental complete global listing (`/experimental/session` with `roots=false` and `archived=true`) and safely maps every listed session to its root across directories. It checks `/session/status` for every involved directory; any busy/retrying descendant or unmapped active ID fails closed, and the affected root is skipped. Before each delete it directly refreshes the root through `GET /session/:id?directory=...`, confirms it is still an old root, reloads the hierarchy, and re-checks activity. Deletes remain serial through `DELETE /session/:id?directory=...`; each successful delete is verified by polling the direct GET until it returns 404/not-found. This lets OpenCode recursively remove children, messages, parts, and events. It never edits SQLite directly or removes WAL/SHM files. An incompatible, unsupported, stalled, or failed API response fails closed and is retried later. Session IDs may be logged for diagnostics, but titles and content are not.
+
+The API has no atomic delete-if-idle operation, so a residual status-to-delete race cannot be eliminated completely. The wrapper's direct refresh and immediate activity/hierarchy recheck narrow that window; OpenCode's own authenticated deletion/cancellation behavior is the final guard, and any failed or uncertain run is retried later.
+
+The global API's cursor contains only `time.updated`; when a full page ends with duplicate timestamps, the worker refuses to delete rather than risk skipping sessions at that boundary. Equal timestamps without this detectable page-boundary pattern remain an upstream limitation of the experimental cursor API.
+Only sessions are targeted; projects, accounts, provider auth, and OpenCode configuration are preserved.
+
+For a safe preview, set `OPENCODE_WEB_RETENTION_DRY_RUN=1`; previews never write the success marker. `health` and `--dry-run` show the effective retention setting and marker path.
 
 ## Instruction File Selection
 
@@ -181,7 +209,8 @@ OPENCODE_SERVER_PASSWORD='change-me-now' opencode_web_yolo
 Run in background (with automatic startup on reboot):
 
 ```bash
-mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD='change-me-now' -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode web --hostname 0.0.0.0 --port 4096
+export OPENCODE_SERVER_PASSWORD='change-me-now'
+mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode web --hostname 0.0.0.0 --port 4096
 ```
 
 Force-refresh image to the resolved latest OpenCode and Playwright versions:

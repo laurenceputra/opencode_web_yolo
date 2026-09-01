@@ -19,6 +19,8 @@ changed_runtime="$(git diff --name-only HEAD^ HEAD -- \
   .opencode_web_yolo_config.sh \
   .opencode_web_yolo.Dockerfile \
   .opencode_web_yolo_entrypoint.sh \
+  .opencode_web_yolo_runtime.sh \
+  .opencode_web_yolo_retention.js \
   install.sh \
   .opencode_web_yolo_completion.bash \
   .opencode_web_yolo_completion.zsh || true)"
@@ -37,4 +39,3 @@ printf '%s\n' "Runtime/release files changed but VERSION was not updated." >&2
 printf '%s\n' "Changed files:" >&2
 printf '%s\n' "$changed_runtime" >&2
 exit 1
-

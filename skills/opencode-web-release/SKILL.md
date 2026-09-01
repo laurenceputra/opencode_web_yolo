@@ -50,6 +50,7 @@ Record version metadata in the image so checks are deterministic.
 
 - Install to `~/.opencode_web_yolo` with predictable paths.
 - Ensure installed command points to the managed wrapper copy.
+- Ship every runtime helper used by the Dockerfile (including the retention supervisor and worker) through both bootstrap installation and self-update managed-file lists.
 - Install/refresh bash and zsh completion scripts idempotently.
 - Fail with clear messages on partial installs.
 

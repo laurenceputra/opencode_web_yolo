@@ -14,6 +14,7 @@
 - Build/update defaults:
   - pull-on-start by default (`OPENCODE_WEB_AUTO_PULL=1`)
 - Reverse proxy is expected in front of localhost bind.
+- Optional weekly session retention is disabled by default.
 
 ## Installation Contract
 
@@ -73,6 +74,7 @@ Docker image includes:
 - `git`
 - `openssh-client`
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
+- PID 1 init/subreaper (`tini`)
 - OpenCode CLI (`opencode-ai` npm package by default)
 - when Playwright build is enabled: global `@playwright/test` package/`playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
 - the browser install is executed by that exact installed package, coupling the Chromium revision to the package version used for the image
@@ -88,6 +90,8 @@ Image metadata files:
 - `/opt/opencode-web-yolo-playwright-expected-version` (Docker build arg version)
 - `/opt/opencode-web-yolo-wrangler`
 - `/app/AGENTS.md` (packaged fallback document)
+- `/usr/local/bin/opencode_web_yolo_runtime.sh` (app/scheduler supervisor)
+- `/usr/local/bin/opencode_web_yolo_retention.js` (authenticated retention worker)
 
 Entrypoint behavior:
 - maps runtime user/group to host UID/GID.
@@ -96,8 +100,25 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
+- when retention is enabled, starts OpenCode, waits for authenticated `/global/health`, and supervises a mapped-user scheduler; TERM/INT are forwarded and the app exit status is returned.
+- Docker starts `tini -s -g` so orphaned descendants are reaped and TERM/INT are forwarded to the child process group. The supervisor preserves the received signal when forwarding it to the app.
 - does not inject unsupported OpenCode CLI flags for instruction loading.
 - relies on OpenCode's native rules discovery (project AGENTS/CLAUDE files and global config-path rules).
+
+## Session Retention
+
+- `OPENCODE_WEB_RETENTION_DAYS` is a non-negative integer; `0` disables cleanup. `--retention-days N` and `--retention-days=N` override it for one invocation.
+- `OPENCODE_WEB_RETENTION_DRY_RUN=1` previews without deleting or advancing state.
+- After authenticated health succeeds, the scheduler calls OpenCode 1.18.25's experimental complete global listing API: `GET /experimental/session?roots=false&archived=true&limit=100`, following its `x-next-cursor` pagination header. It validates the response, builds a complete root-ancestor map across directories, and fails closed on missing parents, cycles, duplicate IDs, or incompatible shapes.
+- Before listing or deleting, the worker validates `/global/health` and accepts only a healthy `1.18.x` version. Every worker fetch has an `AbortSignal.timeout` deadline controlled by `OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS`; deletion verification has its own bounded timeout.
+- Candidates are root sessions whose `time.updated` (epoch milliseconds) is strictly older than `now - retention_days`. Status is checked through authenticated `GET /session/status?directory=...` for every directory in the complete hierarchy; every `busy`/`retry` ID must map to a listed session and its root, otherwise the run fails closed. A busy/retrying descendant blocks its mapped candidate root even when the child is in another directory.
+- Immediately before each delete, the root is refreshed through `GET /session/:sessionID?directory=...`; a missing, non-root, mismatched, or refreshed/recent session is skipped. The complete hierarchy and all relevant statuses are then reloaded before serial authenticated `DELETE /session/:sessionID?directory=...`.
+- Each successful delete is verified by bounded polling of the direct `GET /session/:sessionID?directory=...` until it returns HTTP 404/not-found; other errors remain failures. OpenCode owns recursive cleanup of children, messages, parts, and events. No raw SQL or SQLite WAL/SHM mutation is performed.
+- Because the experimental cursor is only `time.updated`, a full page whose final timestamp is duplicated is rejected as an unsafe equal-timestamp boundary; other equal-timestamp cases remain an upstream completeness limitation.
+- A successful, non-preview run atomically writes `${XDG_STATE_HOME}/session-retention.last-success`. The marker is persistent because `XDG_STATE_HOME` is within the mounted OpenCode data path. Missing/old markers run immediately/when due; failures leave the marker unchanged for retry.
+- The scheduler polls without a cron dependency and stops when OpenCode exits. It never logs session titles or content.
+- `OPENCODE_WEB_RETENTION_POLL_SECONDS` is a positive integer with a one-second minimum; the production default is 3600 seconds.
+- OpenCode does not provide an atomic delete-if-idle operation. The direct root refresh and immediate hierarchy/status recheck narrow the status-to-delete race, while OpenCode's authenticated deletion/cancellation behavior is the final guard; absolute active-session safety cannot be guaranteed.
 
 ## Proxy Streaming Notes
 
@@ -164,5 +185,7 @@ Tests and CI assert:
 - `--wrangler` explicit read-write mount, warning, missing-directory failure, and disabled-by-default behavior.
 - health output includes persistence/lifecycle settings.
 - health output includes browser-vs-server persistence scope visibility.
+- retention configuration, marker path, API schedule, and dry-run state.
+- retention API compatibility, active-session skipping, serial deletion, marker retry semantics, and supervisor signal/exit behavior.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
 - `VERSION` semver format and runtime-file/version drift guard.

@@ -12,6 +12,7 @@ Use this file when editing `install.sh` or completion installation behavior.
 
 - Wrapper script entrypoint.
 - Dockerfile and entrypoint assets required by runtime build.
+- Runtime supervisor and retention worker assets required by the enabled scheduler.
 - Completion scripts:
   - `.opencode_web_yolo_completion.bash`
   - `.opencode_web_yolo_completion.zsh`

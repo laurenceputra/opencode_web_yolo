@@ -39,6 +39,28 @@ normalize_bool() {
   fi
 }
 
+validate_retention_days() {
+  local value
+  case "${OPENCODE_WEB_RETENTION_DAYS}" in
+    ''|*[!0-9]*)
+      die "OPENCODE_WEB_RETENTION_DAYS must be a non-negative integer (received '${OPENCODE_WEB_RETENTION_DAYS:-unset}')."
+      ;;
+  esac
+  value="${OPENCODE_WEB_RETENTION_DAYS}"
+  while [ "${value#0}" != "$value" ]; do value="${value#0}"; done
+  OPENCODE_WEB_RETENTION_DAYS="${value:-0}"
+}
+
+validate_positive_integer() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    die "${name} must be a positive integer (received '${value:-unset}')."
+  fi
+  if [ "${#value}" -gt 10 ] || { [ "${#value}" -eq 10 ] && (( value > 2147483647 )); }; then
+    die "${name} is outside the supported positive integer range (received '${value}')."
+  fi
+}
+
 log() {
   printf '%s\n' "[opencode_web_yolo] $*"
 }
@@ -116,6 +138,8 @@ managed_files() {
 .opencode_web_yolo_config.sh
 .opencode_web_yolo.Dockerfile
 .opencode_web_yolo_entrypoint.sh
+.opencode_web_yolo_runtime.sh
+.opencode_web_yolo_retention.js
 .opencode_web_yolo_completion.bash
 .opencode_web_yolo_completion.zsh
 install.sh
@@ -214,6 +238,8 @@ Wrapper flags:
   --no-pull              Skip default pull-on-start behavior for this run.
   --playwright           Build runtime image with Playwright Chromium.
   --wrangler             Build Wrangler and mount host Wrangler config read-write.
+  --retention-days N     Delete inactive root sessions older than N days (0 disables).
+  --retention-days=N     Same as above, using an equals-form value.
   --agents-file PATH     Mount a host AGENTS.md file read-only.
   --no-host-agents       Skip mounting host AGENTS.md.
   --dry-run              Print docker command and exit.
@@ -238,6 +264,7 @@ Lifecycle defaults:
   Restart policy: ${OPENCODE_WEB_RESTART_POLICY}
   Background mode: ${OPENCODE_WEB_RUN_DETACHED}
   Pull-on-start: ${OPENCODE_WEB_AUTO_PULL}
+  Session retention: ${OPENCODE_WEB_RETENTION_DAYS} days (0 disables)
 
 First-time setup:
   1) Create config file:
@@ -289,6 +316,12 @@ export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 # This explicit pin remains effective even when version checks are skipped.
 # export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=1.62.1
 export OPENCODE_WEB_BUILD_WRANGLER=0
+export OPENCODE_WEB_RETENTION_DAYS=0
+# Set OPENCODE_WEB_RETENTION_DAYS to a non-negative integer to enable weekly cleanup.
+# export OPENCODE_WEB_RETENTION_DRY_RUN=1
+export OPENCODE_WEB_RETENTION_POLL_SECONDS=3600
+export OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS=10000
+export OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS=10000
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=0
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 # Required: set a non-empty password before running the server.
@@ -329,6 +362,13 @@ show_health() {
   printf '%s\n' "  build_pull=${OPENCODE_WEB_BUILD_PULL}"
   printf '%s\n' "  build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
   printf '%s\n' "  build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
+  printf '%s\n' "  retention_days=${OPENCODE_WEB_RETENTION_DAYS}"
+  printf '%s\n' "  retention_dry_run=${OPENCODE_WEB_RETENTION_DRY_RUN}"
+  printf '%s\n' "  retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
+  printf '%s\n' "  retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
+  printf '%s\n' "  retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
+  printf '%s\n' "  retention_schedule=after-health-at-most-weekly"
+  printf '%s\n' "  retention_marker=${runtime_xdg_state}/session-retention.last-success"
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
@@ -659,6 +699,14 @@ main() {
         OPENCODE_WEB_BUILD_WRANGLER=1
         use_wrangler=1
         ;;
+      --retention-days=*)
+        OPENCODE_WEB_RETENTION_DAYS="${1#*=}"
+        ;;
+      --retention-days)
+        shift
+        [ "$#" -gt 0 ] || die "--retention-days requires a non-negative integer value."
+        OPENCODE_WEB_RETENTION_DAYS="$1"
+        ;;
       --agents-file=*)
         host_agents_enabled=1
         host_agents_source="flag"
@@ -723,6 +771,13 @@ main() {
   OPENCODE_WEB_RUN_DETACHED="$(normalize_bool "${OPENCODE_WEB_RUN_DETACHED}")"
   OPENCODE_WEB_SKIP_UPDATE_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_UPDATE_CHECK}")"
   OPENCODE_WEB_SKIP_VERSION_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_VERSION_CHECK}")"
+  OPENCODE_WEB_RETENTION_DRY_RUN="$(normalize_bool "${OPENCODE_WEB_RETENTION_DRY_RUN}")"
+  validate_retention_days
+  if [ "$OPENCODE_WEB_RETENTION_DAYS" != "0" ]; then
+    validate_positive_integer OPENCODE_WEB_RETENTION_POLL_SECONDS "${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
+    validate_positive_integer OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS "${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
+    validate_positive_integer OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS "${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
+  fi
 
   case "$mode" in
     version)
@@ -750,6 +805,7 @@ main() {
   fi
 
   require_password
+  export OPENCODE_SERVER_PASSWORD
   require_command docker
   docker info >/dev/null 2>&1 || die "Docker daemon is not available."
   [ -n "${OPENCODE_WEB_CONTAINER_NAME}" ] || die "OPENCODE_WEB_CONTAINER_NAME must be non-empty."
@@ -773,8 +829,14 @@ main() {
     -e "LOCAL_USER=$(id -un)"
     -e "OPENCODE_WEB_YOLO_CLEANUP=${OPENCODE_WEB_YOLO_CLEANUP}"
     -e "OPENCODE_WEB_YOLO_HOME=${OPENCODE_WEB_YOLO_HOME}"
-    -e "OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}"
+    -e OPENCODE_SERVER_PASSWORD
     -e "OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
+    -e "OPENCODE_WEB_PORT=${OPENCODE_WEB_PORT}"
+    -e "OPENCODE_WEB_RETENTION_DAYS=${OPENCODE_WEB_RETENTION_DAYS}"
+    -e "OPENCODE_WEB_RETENTION_DRY_RUN=${OPENCODE_WEB_RETENTION_DRY_RUN}"
+    -e "OPENCODE_WEB_RETENTION_POLL_SECONDS=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
+    -e "OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
+    -e "OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
     -e "HOME=${runtime_home}"
     -e "XDG_CONFIG_HOME=${runtime_xdg_config}"
     -e "XDG_DATA_HOME=${runtime_xdg_data}"
@@ -883,6 +945,13 @@ main() {
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
     printf '%s\n' "build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
     printf '%s\n' "build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
+    printf '%s\n' "retention_days=${OPENCODE_WEB_RETENTION_DAYS}"
+    printf '%s\n' "retention_dry_run=${OPENCODE_WEB_RETENTION_DRY_RUN}"
+    printf '%s\n' "retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
+    printf '%s\n' "retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
+    printf '%s\n' "retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
+    printf '%s\n' "retention_schedule=after-health-at-most-weekly"
+    printf '%s\n' "retention_marker=${runtime_xdg_state}/session-retention.last-success"
     printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
     printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"
     printf '%s\n' "runtime_env_home=${runtime_home}"
