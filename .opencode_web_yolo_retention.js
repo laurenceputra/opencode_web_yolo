@@ -139,19 +139,13 @@ function validateSession(session) {
   }
 }
 
-async function listSessions(deadline) {
+async function listSessions() {
   const sessions = []
   let cursor
   const seenCursors = new Set()
 
   for (let pageNumber = 0; pageNumber < 10000; pageNumber += 1) {
-    const remaining = deadline === undefined ? undefined : deadline - Date.now()
-    if (remaining !== undefined && remaining <= 0) {
-      throw new Error("session deletion verification timed out")
-    }
-    const result = await requestJson("/experimental/session", remaining === undefined ? {} : {
-      timeoutMs: Math.min(remaining, positiveInteger("OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS", DEFAULT_FETCH_TIMEOUT_MS)),
-    }, {
+    const result = await requestJson("/experimental/session", {}, {
       roots: "false",
       archived: "true",
       limit: PAGE_LIMIT,
