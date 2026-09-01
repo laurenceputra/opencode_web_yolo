@@ -31,6 +31,8 @@ if [ "${#RETENTION_POLL_SECONDS}" -gt 10 ] || { [ "${#RETENTION_POLL_SECONDS}" -
   exit 1
 fi
 
+# Invoked indirectly by the TERM and INT traps below.
+# shellcheck disable=SC2317
 forward_signal() {
   local signal="$1"
   stopping=1
@@ -43,6 +45,8 @@ trap 'forward_signal INT' INT
 
 health_ok() {
   local health_body auth
+  # This single-quoted JavaScript intentionally contains a template literal.
+  # shellcheck disable=SC2016
   if ! auth="$(node -e 'process.stdout.write(Buffer.from(`${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || ""}`).toString("base64"))')"; then
     return 1
   fi
