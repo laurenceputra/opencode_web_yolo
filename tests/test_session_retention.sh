@@ -357,8 +357,8 @@ wait "$server_pid" >/dev/null 2>&1 || true
 runtime="$(cat "${ROOT_DIR}/.opencode_web_yolo_runtime.sh")"
 assert_contains "$runtime" "trap 'forward_signal TERM' TERM"
 assert_contains "$runtime" "trap 'forward_signal INT' INT"
-assert_contains "$runtime" 'wait "$app_pid"'
-assert_contains "$runtime" 'exit "$app_status"'
+assert_contains "$runtime" "wait \"\$app_pid\""
+assert_contains "$runtime" "exit \"\$app_status\""
 dockerfile="$(cat "${ROOT_DIR}/.opencode_web_yolo.Dockerfile")"
 assert_contains "$dockerfile" ".opencode_web_yolo_retention.js"
 assert_contains "$dockerfile" "tini"
