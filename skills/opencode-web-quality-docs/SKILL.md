@@ -30,6 +30,7 @@ Ensure CI validates at least:
 - required auth failure when password is missing
 - package availability checks (`gh`, `git`, `ssh`) in image
 - config/data mount contract checks for persistence behavior
+- retention flag/config validation, dry-run propagation, API mock semantics, scheduler marker persistence/retry, and process lifecycle/signal behavior
 - guard checks for version format and runtime-file/version drift
 
 Prefer deterministic shell tests with clear failure messages.
@@ -47,6 +48,7 @@ Document these operator-critical topics:
 - troubleshooting and diagnostics usage
 
 Keep docs implementation-accurate; update docs in the same change as behavior.
+- Document retention's experimental API dependency, strict fail-closed behavior, mapped-user marker path, recursive OpenCode deletion, and no-SQL/WAL/SHM policy.
 
 # Review Checklist
 

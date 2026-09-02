@@ -18,6 +18,7 @@ RUN apt-get update \
     openssh-client \
     passwd \
     sudo \
+    tini \
   && rm -rf /var/lib/apt/lists/*
 
 ARG OPENCODE_NPM_PACKAGE=opencode-ai
@@ -61,7 +62,11 @@ This is a built-in fallback instruction file used when no host AGENTS.md is moun
 EOF
 
 COPY .opencode_web_yolo_entrypoint.sh /usr/local/bin/opencode_web_yolo_entrypoint.sh
-RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh
+COPY .opencode_web_yolo_runtime.sh /usr/local/bin/opencode_web_yolo_runtime.sh
+COPY .opencode_web_yolo_retention.js /usr/local/bin/opencode_web_yolo_retention.js
+RUN chmod +x /usr/local/bin/opencode_web_yolo_entrypoint.sh \
+  /usr/local/bin/opencode_web_yolo_runtime.sh \
+  /usr/local/bin/opencode_web_yolo_retention.js
 
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/opencode_web_yolo_entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-s", "-g", "--", "/usr/local/bin/opencode_web_yolo_entrypoint.sh"]

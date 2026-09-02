@@ -7,6 +7,7 @@ _opencode_web_yolo_completion() {
     '--no-pull:Skip default pull-on-start for this run'
     '--playwright:Build runtime image with Playwright Chromium'
     '--wrangler:Build Wrangler and mount host config read-write'
+    '--retention-days[Delete inactive root sessions older than N days]:days'
     '--detach:Run in background mode'
     '-d:Run in background mode'
     '--foreground:Run attached in current terminal'

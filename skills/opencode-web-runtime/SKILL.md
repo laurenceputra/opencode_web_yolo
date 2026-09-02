@@ -44,6 +44,14 @@ Enforce these contracts on every runtime change:
 5. Keep diagnostics independent of container startup.
 6. In entrypoint, map UID/GID, ensure writable runtime dirs, avoid recursive chown on read-only mounts, then exec via `gosu`.
 
+# Retention lifecycle
+
+- For enabled retention, start the scheduler only after authenticated `/global/health` succeeds; forward TERM/INT, stop it with the app, and return the app status.
+- Run retention as the mapped user and persist its success marker under `XDG_STATE_HOME`; do not use a restart-resetting sleep schedule.
+- Use OpenCode's authenticated experimental global session listing and delete endpoint, serially, with strict response validation and fail-closed behavior. Never mutate SQLite directly.
+- Install/use `tini` as PID 1 with subreaping and process-group signal forwarding; do not remap SIGINT to TERM in the supervisor.
+- Bound every retention worker fetch, gate on a tested healthy OpenCode 1.18.x version, re-check active status before each deletion, and verify deletion disappearance before advancing state.
+
 # Guardrails
 
 - Do not relax auth requirements for localhost usage.

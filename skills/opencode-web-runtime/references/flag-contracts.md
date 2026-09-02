@@ -13,7 +13,8 @@ Use this file when adding or changing wrapper CLI behavior.
   - `health`, `--health`, `diagnostics`
   - `config`
   - `--version`, `version`
-  - `--verbose`, `-v`
+   - `--verbose`, `-v`
+   - `--retention-days N`, `--retention-days=N`
 
 ## Parsing Rules
 
@@ -24,6 +25,7 @@ Use this file when adding or changing wrapper CLI behavior.
 - `--wrangler` must set `OPENCODE_WEB_BUILD_WRANGLER=1`, require the host
   `${XDG_CONFIG_HOME:-$HOME/.config}/.wrangler` directory, and mount it as
   `${OPENCODE_WEB_YOLO_HOME}/.config/.wrangler:rw` only for that run.
+- `--retention-days` requires a following non-negative integer (or a non-negative integer after `=`), overrides `OPENCODE_WEB_RETENTION_DAYS` for that invocation, and never leaks into OpenCode app args.
 
 ## Verification Expectations
 

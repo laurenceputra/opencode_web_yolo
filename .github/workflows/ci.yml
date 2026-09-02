@@ -15,6 +15,7 @@ jobs:
           bash -n .opencode_web_yolo.sh
           bash -n .opencode_web_yolo_config.sh
           bash -n .opencode_web_yolo_entrypoint.sh
+          bash -n .opencode_web_yolo_runtime.sh
           bash -n install.sh
           bash -n tests/test_helpers.sh
           bash -n tests/test_dry_run.sh
@@ -37,6 +38,7 @@ jobs:
           bash -n tests/test_source_of_truth_refs.sh
           bash -n tests/test_docs_required_sections.sh
           bash -n tests/test_technical_required_sections.sh
+          bash -n tests/test_session_retention.sh
           bash -n tests/run.sh
           bash -n tests/version_guard.sh
       - name: Shellcheck
@@ -44,6 +46,7 @@ jobs:
           shellcheck -x .opencode_web_yolo.sh
           shellcheck .opencode_web_yolo_config.sh
           shellcheck .opencode_web_yolo_entrypoint.sh
+          shellcheck .opencode_web_yolo_runtime.sh
           shellcheck install.sh
           shellcheck -x tests/test_helpers.sh
           shellcheck -x tests/test_dry_run.sh
@@ -66,8 +69,11 @@ jobs:
           shellcheck -x tests/test_source_of_truth_refs.sh
           shellcheck -x tests/test_docs_required_sections.sh
           shellcheck -x tests/test_technical_required_sections.sh
+          shellcheck -x tests/test_session_retention.sh
           shellcheck -x tests/run.sh
           shellcheck -x tests/version_guard.sh
+      - name: JavaScript syntax check
+        run: node --check .opencode_web_yolo_retention.js
 
   behavior-checks:
     runs-on: ubuntu-latest
@@ -100,7 +106,7 @@ jobs:
         run: docker build -f .opencode_web_yolo.Dockerfile -t opencode_web_yolo:ci .
       - name: Validate required binaries
         run: |
-          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh'
+          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v tini'
       - name: Build Playwright-enabled runtime image
         run: |
           docker build \
