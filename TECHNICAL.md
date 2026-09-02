@@ -20,13 +20,16 @@
 
 - `install.sh` supports two valid install flows:
   - repo-local install (`./install.sh`) using sibling managed files from the checkout
-  - streamed/bootstrap install (for example `curl -fsSL .../install.sh | bash`) that fetches managed files before install
+  - streamed/bootstrap install (for example `curl -fsSL .../install.sh | bash`) that fetches one branch archive before install
 - Bootstrap fetch source defaults:
   - repo: `OPENCODE_WEB_YOLO_REPO` when set
   - repo fallback: current git `origin` in `${PWD}` when available
   - final repo fallback: `laurenceputra/opencode_web_yolo`
   - branch: `OPENCODE_WEB_YOLO_BRANCH` (default `main`)
 - Installer always installs managed runtime files into `${OPENCODE_WEB_INSTALL_HOME:-$HOME/.opencode_web_yolo}` and symlinks command to `${OPENCODE_WEB_BIN_DIR:-$HOME/.local/bin}/opencode_web_yolo`.
+- `.opencode_web_yolo.manifest` is the tracked release asset manifest. Installer and self-update validate every listed file as a non-empty regular file; shell assets are syntax-checked before promotion.
+- Bootstrap and self-update require `curl` and `tar` when an archive is needed. Archive contents are staged on the install filesystem, validated as one snapshot, and promoted with same-filesystem file renames. The wrapper is promoted near-last and `VERSION` last so an interrupted update can be retried without falsely advancing the installed release.
+- Archive validation rejects absolute or multi-root paths, any `.`/`..` path component, duplicate manifest entries, and every non-regular/non-directory tar entry (including links, devices, and FIFOs) before extraction.
 
 ## Security Model
 
@@ -138,7 +141,8 @@ On run, unless disabled:
 - wrapper checks remote `VERSION` from `${OPENCODE_WEB_YOLO_REPO}` and `${OPENCODE_WEB_YOLO_BRANCH}`.
   - default repo: `laurenceputra/opencode_web_yolo`
   - default branch: `main`
-- if remote version is newer, managed files are downloaded, replaced, and wrapper re-execs with original args.
+- if remote version is newer, the complete source is downloaded from `https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz`, extracted to install-home staging, validated against `.opencode_web_yolo.manifest`, promoted with atomic individual renames, and the wrapper re-execs with original args/environment.
+- if the local managed install is incomplete, the same archive repair runs even when local and remote `VERSION` values are equal. A re-exec marker prevents an update loop, and an incomplete or malformed archive fails closed before Docker build.
 
 Update can be disabled with:
 - `OPENCODE_WEB_SKIP_UPDATE_CHECK=1`
