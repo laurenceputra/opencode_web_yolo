@@ -227,10 +227,6 @@ managed_files_for_dir() {
   fi
 }
 
-managed_files() {
-  managed_files_for_dir "$SCRIPT_DIR"
-}
-
 validate_managed_tree() {
   local source_dir="$1" manifest_file required_file required_path version
 
