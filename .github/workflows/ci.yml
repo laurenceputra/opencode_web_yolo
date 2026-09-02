@@ -17,6 +17,7 @@ jobs:
           bash -n .opencode_web_yolo_entrypoint.sh
           bash -n .opencode_web_yolo_runtime.sh
           bash -n install.sh
+          bash -n tests/fixtures/old-0.1.10/.opencode_web_yolo.sh
           bash -n tests/test_helpers.sh
           bash -n tests/test_dry_run.sh
           bash -n tests/test_build_expected_version.sh
@@ -32,6 +33,7 @@ jobs:
           bash -n tests/test_playwright_dockerfile_contract.sh
           bash -n tests/test_version_command.sh
           bash -n tests/test_self_update.sh
+          bash -n tests/test_install_bootstrap.sh
           bash -n tests/test_auth_required.sh
           bash -n tests/test_sensitive_mounts.sh
           bash -n tests/test_spec_ignore.sh
@@ -48,6 +50,7 @@ jobs:
           shellcheck .opencode_web_yolo_entrypoint.sh
           shellcheck .opencode_web_yolo_runtime.sh
           shellcheck install.sh
+          shellcheck tests/fixtures/old-0.1.10/.opencode_web_yolo.sh
           shellcheck -x tests/test_helpers.sh
           shellcheck -x tests/test_dry_run.sh
           shellcheck -x tests/test_build_expected_version.sh
@@ -63,6 +66,7 @@ jobs:
           shellcheck -x tests/test_playwright_dockerfile_contract.sh
           shellcheck -x tests/test_version_command.sh
           shellcheck -x tests/test_self_update.sh
+          shellcheck -x tests/test_install_bootstrap.sh
           shellcheck -x tests/test_auth_required.sh
           shellcheck -x tests/test_sensitive_mounts.sh
           shellcheck -x tests/test_spec_ignore.sh

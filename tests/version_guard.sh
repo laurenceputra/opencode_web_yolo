@@ -15,6 +15,7 @@ if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
 fi
 
 changed_runtime="$(git diff --name-only HEAD^ HEAD -- \
+  .opencode_web_yolo.manifest \
   .opencode_web_yolo.sh \
   .opencode_web_yolo_config.sh \
   .opencode_web_yolo.Dockerfile \

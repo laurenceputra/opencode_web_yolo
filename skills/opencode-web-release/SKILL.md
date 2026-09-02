@@ -30,11 +30,11 @@ Load only the file that matches the current release task:
 
 # Update Workflow
 
-1. Read local `VERSION`.
+1. Read local `VERSION` and validate the complete managed install.
 2. Skip remote checks only when explicit skip flags/env vars are set.
 3. Fetch remote `VERSION` from configured repo/branch.
-4. When remote is newer, update distributed files atomically.
-5. Re-exec wrapper after successful update.
+4. When remote is newer, or when required files are missing at an equal version, stage and validate one branch archive before atomically promoting distributed files.
+5. Re-exec wrapper after successful update, with a guard against update loops.
 
 # Image Rebuild Policy
 
@@ -50,7 +50,8 @@ Record version metadata in the image so checks are deterministic.
 
 - Install to `~/.opencode_web_yolo` with predictable paths.
 - Ensure installed command points to the managed wrapper copy.
-- Ship every runtime helper used by the Dockerfile (including the retention supervisor and worker) through both bootstrap installation and self-update managed-file lists.
+- Ship every runtime helper used by the Dockerfile (including the retention supervisor and worker) through both bootstrap installation and self-update managed-file manifests/lists.
+- Use the tracked `.opencode_web_yolo.manifest` for the complete release asset set. Bootstrap and self-update fetch one GitHub branch archive snapshot and validate every listed non-empty file before promotion, while retaining a compatibility fallback for historical wrappers that predate newly added assets.
 - Install/refresh bash and zsh completion scripts idempotently.
 - Fail with clear messages on partial installs.
 

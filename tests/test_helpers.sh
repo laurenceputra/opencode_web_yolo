@@ -38,21 +38,7 @@ assert_file_executable() {
 }
 
 managed_wrapper_files() {
-  cat <<'EOF'
-.opencode_web_yolo.sh
-.opencode_web_yolo_config.sh
-.opencode_web_yolo.Dockerfile
-.opencode_web_yolo_entrypoint.sh
-.opencode_web_yolo_runtime.sh
-.opencode_web_yolo_retention.js
-.opencode_web_yolo_completion.bash
-.opencode_web_yolo_completion.zsh
-install.sh
-VERSION
-CHANGELOG.md
-README.md
-TECHNICAL.md
-EOF
+  cat "${ROOT_DIR}/.opencode_web_yolo.manifest"
 }
 
 create_managed_install_home() {
@@ -143,6 +129,51 @@ log_file="${OPENCODE_WEB_TEST_CURL_LOG:-}"
 
 if [ -n "$log_file" ]; then
   printf '%s\n' "$url" >>"$log_file"
+fi
+
+if [[ "$url" == https://github.com/*/archive/refs/heads/*.tar.gz ]]; then
+  if [ "${OPENCODE_WEB_TEST_CURL_FAIL_ON:-}" = "archive" ]; then
+    printf '%s\n' "simulated curl failure for release archive" >&2
+    exit 1
+  fi
+  if [ "${OPENCODE_WEB_TEST_ARCHIVE_MODE:-}" = "malformed" ]; then
+    printf '%s\n' "not a tar archive" >"$4"
+    exit 0
+  fi
+  archive_dir="$(mktemp -d)"
+  mkdir -p "${archive_dir}/release-root"
+  while IFS= read -r archive_file; do
+    if [ "${OPENCODE_WEB_TEST_ARCHIVE_MISSING:-}" = "$archive_file" ]; then
+      continue
+    fi
+    mkdir -p "$(dirname "${archive_dir}/release-root/${archive_file}")"
+    cp -p "${remote_dir}/${archive_file}" "${archive_dir}/release-root/${archive_file}"
+  done <"${remote_dir}/.opencode_web_yolo.manifest"
+  case "${OPENCODE_WEB_TEST_ARCHIVE_MODE:-}" in
+    traversal)
+      mkdir -p "${archive_dir}/outside"
+      printf '%s\n' traversal >"${archive_dir}/outside/escape"
+      tar -czf "$4" -C "$archive_dir" --transform='s#^outside/escape#release-root/../escape#' release-root outside/escape
+      ;;
+    multi-root)
+      mkdir -p "${archive_dir}/other-root"
+      printf '%s\n' second-root >"${archive_dir}/other-root/extra"
+      tar -czf "$4" -C "$archive_dir" release-root other-root
+      ;;
+    symlink)
+      ln -s VERSION "${archive_dir}/release-root/unsafe-link"
+      tar -czf "$4" -C "$archive_dir" release-root
+      ;;
+    hardlink)
+      ln "${archive_dir}/release-root/VERSION" "${archive_dir}/release-root/unsafe-hardlink"
+      tar -czf "$4" -C "$archive_dir" release-root
+      ;;
+    *)
+      tar -czf "$4" -C "$archive_dir" release-root
+      ;;
+  esac
+  rm -rf "$archive_dir"
+  exit 0
 fi
 
 if [ -z "$remote_dir" ]; then
