@@ -38,6 +38,7 @@ assert_file_executable() {
 }
 
 managed_wrapper_files() {
+  # shellcheck disable=SC2153 # ROOT_DIR is defined by each test before sourcing helpers.
   cat "${ROOT_DIR}/.opencode_web_yolo.manifest"
 }
 
