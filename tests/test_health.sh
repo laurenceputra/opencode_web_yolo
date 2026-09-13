@@ -15,6 +15,7 @@ setup_fake_docker "$FAKE_BIN" "$WRAPPER_VERSION"
 export PATH="${FAKE_BIN}:${PATH}"
 export HOME="${TMP_DIR}/home"
 unset XDG_CONFIG_HOME XDG_DATA_HOME || true
+unset OPENCODE_WEB_RETENTION_DAYS || true
 mkdir -p "${HOME}"
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=1
 

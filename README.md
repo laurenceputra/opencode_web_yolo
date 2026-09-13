@@ -30,7 +30,7 @@ opencode_web_yolo
 Defaults:
 - Port: `4096`
 - Bind/publish: `127.0.0.1:4096:4096`
-- OpenCode web host inside container: `0.0.0.0`
+- OpenCode serve host inside container: `0.0.0.0`
 - OpenCode package install target: `latest` at build time
 - Playwright build: disabled by default; opt in with `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config or `--playwright` for one run
 - Container name: `opencode_web_yolo`
@@ -99,8 +99,8 @@ Operator-facing settings:
 | --- | --- | --- |
 | `OPENCODE_SERVER_PASSWORD` | none, required | Required non-empty password for OpenCode Web. Startup fails if it is missing or empty. |
 | `OPENCODE_SERVER_USERNAME` | `opencode` | Login username paired with `OPENCODE_SERVER_PASSWORD`. |
-| `OPENCODE_WEB_PORT` | `4096` | Host/container port used for `opencode web` and the local Docker publish mapping. |
-| `OPENCODE_WEB_HOSTNAME` | `0.0.0.0` | Hostname passed to `opencode web` inside the container. |
+| `OPENCODE_WEB_PORT` | `4096` | Host/container port used for `opencode serve` and the local Docker publish mapping. |
+| `OPENCODE_WEB_HOSTNAME` | `0.0.0.0` | Hostname passed to `opencode serve` inside the container. |
 | `OPENCODE_WEB_CONTAINER_NAME` | `opencode_web_yolo` | Docker container name used for launch, replacement, and diagnostics. |
 | `OPENCODE_WEB_RESTART_POLICY` | `unless-stopped` | Docker restart policy applied to the container. |
 | `OPENCODE_WEB_RUN_DETACHED` | `1` | Launch mode default. Use `1` for background mode or `0` for attached runs unless overridden by flags. |
@@ -143,6 +143,18 @@ Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized
 
 Provider auth/session state (for example OpenAI and GitHub Copilot links) persists across restarts from the OpenCode data path.
 The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`) to `/home/opencode` paths so app writes always land on mounted host directories.
+
+On every container startup, after the mapped-user ownership and XDG setup, the entrypoint checks
+`$XDG_DATA_HOME/opencode/opencode.db`. If that database exists, it runs `VACUUM;` with `sqlite3` as
+the mapped runtime user, waiting up to 5000 ms for a lock. GNU `timeout` sends TERM after 300
+seconds and sends KILL 5 seconds later if VACUUM is still running. A missing database is skipped
+without creating one. Vacuum can add startup latency and temporarily require additional disk space
+while SQLite rewrites the database. If it cannot vacuum because of a lock, permissions, corruption,
+disk space, timeout, or another error, startup prints a warning and continues.
+
+Startup VACUUM is separate from weekly retention. The retention worker remains an authenticated
+OpenCode API worker: it does not use raw SQL or manually modify SQLite WAL, SHM, or journal
+sidecars.
 
 ## Weekly session retention
 
@@ -210,7 +222,7 @@ Run in background (with automatic startup on reboot):
 
 ```bash
 export OPENCODE_SERVER_PASSWORD='change-me-now'
-mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode web --hostname 0.0.0.0 --port 4096
+mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode serve --hostname 0.0.0.0 --port 4096
 ```
 
 Force-refresh image to the resolved latest OpenCode and Playwright versions:

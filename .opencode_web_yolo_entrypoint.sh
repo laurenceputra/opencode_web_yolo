@@ -10,6 +10,9 @@ XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${OPENCODE_WEB_YOLO_HOME}/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-${OPENCODE_WEB_YOLO_HOME}/.local/share}"
 XDG_STATE_HOME="${XDG_STATE_HOME:-${XDG_DATA_HOME}/opencode/state}"
 OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_RETENTION_DAYS-0}"
+STARTUP_VACUUM_BUSY_TIMEOUT_MS=5000
+STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=300
+STARTUP_VACUUM_KILL_AFTER_SECONDS=5
 
 case "$OPENCODE_WEB_RETENTION_DAYS" in
   ''|*[!0-9]*)
@@ -79,6 +82,26 @@ export HOME="${OPENCODE_WEB_YOLO_HOME}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME}"
 export XDG_DATA_HOME="${XDG_DATA_HOME}"
 export XDG_STATE_HOME="${XDG_STATE_HOME}"
+
+opencode_database="${XDG_DATA_HOME}/opencode/opencode.db"
+if [ -f "${opencode_database}" ]; then
+  printf '%s\n' "[opencode_web_yolo] VACUUM: compacting OpenCode database at ${opencode_database}."
+  if gosu "${runtime_user}" timeout \
+    --kill-after="${STARTUP_VACUUM_KILL_AFTER_SECONDS}" \
+    "${STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}" \
+    sqlite3 \
+    -cmd ".timeout ${STARTUP_VACUUM_BUSY_TIMEOUT_MS}" \
+    "${opencode_database}" 'VACUUM;'; then
+    :
+  else
+    vacuum_status=$?
+    if [ "$vacuum_status" -eq 124 ] || [ "$vacuum_status" -eq 137 ]; then
+      printf '%s\n' "[opencode_web_yolo] WARNING: startup VACUUM timed out after the ${STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}-second TERM deadline (KILL escalation after ${STARTUP_VACUUM_KILL_AFTER_SECONDS} additional seconds); continuing startup." >&2
+    else
+      printf '%s\n' "[opencode_web_yolo] WARNING: startup VACUUM failed for ${opencode_database}; continuing startup." >&2
+    fi
+  fi
+fi
 
 if [ "$OPENCODE_WEB_RETENTION_DAYS" = "0" ]; then
   exec env HOME="${HOME}" XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" XDG_DATA_HOME="${XDG_DATA_HOME}" XDG_STATE_HOME="${XDG_STATE_HOME}" gosu "${runtime_user}" "$@"

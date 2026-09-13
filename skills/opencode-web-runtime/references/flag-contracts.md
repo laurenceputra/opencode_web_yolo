@@ -19,7 +19,7 @@ Use this file when adding or changing wrapper CLI behavior.
 ## Parsing Rules
 
 - Recognize wrapper flags first.
-- Preserve pass-through args for OpenCode web command.
+- Preserve pass-through args for the OpenCode serve command.
 - Require an explicit separator strategy so wrapper flags do not leak into app args.
 - Keep command behavior deterministic for both dry-run and run paths.
 - `--wrangler` must set `OPENCODE_WEB_BUILD_WRANGLER=1`, require the host
@@ -31,7 +31,7 @@ Use this file when adding or changing wrapper CLI behavior.
 
 - Dry-run output includes:
   - local-only port mapping
-  - OpenCode web command
+  - `opencode serve` command
   - effective environment values
 - Unknown flags are either passed through or rejected intentionally with clear messaging.
 - Instruction loading must not add unsupported app CLI flags; rely on OpenCode native project/global rules discovery and mounted config paths.

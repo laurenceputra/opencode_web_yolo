@@ -925,7 +925,7 @@ main() {
     host_agents_log="Host instruction file mount disabled by --no-host-agents."
   fi
 
-  app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
+  app_cmd=(opencode serve --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
   app_cmd+=("${passthrough[@]}")
 
   ensure_image
@@ -958,7 +958,7 @@ main() {
     printf '%s\n' "runtime_env_xdg_config_home=${runtime_xdg_config}"
     printf '%s\n' "runtime_env_xdg_data_home=${runtime_xdg_data}"
     printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
-    printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
+    printf '%s\n' "command=opencode serve --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
     printf '%s\n' "host_agents_source=${host_agents_source}"
     printf '%s\n' "host_agents_path=${host_agents_path}"
