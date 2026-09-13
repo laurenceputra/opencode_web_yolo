@@ -8,6 +8,10 @@ All notable changes to this project are documented here.
 - Added startup SQLite VACUUM maintenance for existing OpenCode databases, with mapped-user execution, a 5000 ms lock wait, TERM after 300 seconds, KILL escalation after 5 more seconds, and warning-only failure handling.
 - Added `sqlite3` to the runtime image.
 
+## [0.2.2] - 2026-09-02
+
+- Fixed self-update and streamed installation to use a validated GitHub branch archive snapshot, including repair of incomplete installs at an equal version. Promotion is retry-safe with `VERSION` last, and malformed or incomplete releases fail closed before Docker build. Historical 0.1.10 installs on stock macOS/BSD may need the latest `install.sh` because their old updater depends on GNU `sort -V`.
+
 ## [0.2.1] - 2026-09-01
 
 - Hardened retention against cross-directory active descendants, stale root refreshes, stale DELETE responses, unsupported OpenCode versions, stalled APIs, unsafe pagination boundaries, signal/process-tree issues, and scheduler misconfiguration. Deletion verification now requires direct 404/not-found responses, and documentation explicitly records the API's residual delete-if-idle race.

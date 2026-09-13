@@ -79,6 +79,14 @@ Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to preview the exact docker command 
 `opencode_web_yolo` now defaults to background mode and pull-on-start. Use `--foreground --no-pull` for attached/no-pull runs.
 If a container with the configured name already exists, wrapper launch replaces it (stops if running, then removes, then starts fresh).
 
+### Self-update and repair
+
+Managed installs check the configured GitHub branch on startup. An update downloads one branch archive snapshot, validates the complete release (including the runtime supervisor and retention worker), and only then promotes it before re-executing with the original arguments and environment. The tracked `.opencode_web_yolo.manifest` controls the release file set. Incomplete installs are repaired even when their local `VERSION` equals the remote version; malformed or incomplete archives are rejected before Docker build. Set `OPENCODE_WEB_SKIP_UPDATE_CHECK=1` to skip network checks, but an incomplete managed install still fails closed and must be repaired with `install.sh`.
+
+Bootstrap installation from `curl | bash` uses the same archive-and-validation flow. `curl` and `tar` are required for streamed/bootstrap installs and self-update repairs. Branch names containing `/` are supported; other URL-significant branch characters are encoded safely.
+
+Recovery note for historical `0.1.10` installs: that old updater relies on GNU `sort -V`, which stock macOS/BSD `sort` does not provide. If such an install cannot start its updater, rerun the latest `install.sh`; the current wrapper's portable comparator cannot repair an updater that fails before it can launch the current wrapper.
+
 ## Configuration
 
 Run `opencode_web_yolo config` to generate a sample config file at `~/.opencode_web_yolo/config`.

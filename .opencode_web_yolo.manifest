@@ -1,0 +1,16 @@
+.opencode_web_yolo.manifest
+.opencode_web_yolo.sh
+.opencode_web_yolo_config.sh
+.opencode_web_yolo.Dockerfile
+.opencode_web_yolo_entrypoint.sh
+.opencode_web_yolo_runtime.sh
+.opencode_web_yolo_retention.js
+.opencode_web_yolo_completion.bash
+.opencode_web_yolo_completion.zsh
+install.sh
+VERSION
+CHANGELOG.md
+README.md
+TECHNICAL.md
+LICENSE
+CODEOWNERS

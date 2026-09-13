@@ -39,28 +39,6 @@ normalize_bool() {
   fi
 }
 
-validate_retention_days() {
-  local value
-  case "${OPENCODE_WEB_RETENTION_DAYS}" in
-    ''|*[!0-9]*)
-      die "OPENCODE_WEB_RETENTION_DAYS must be a non-negative integer (received '${OPENCODE_WEB_RETENTION_DAYS:-unset}')."
-      ;;
-  esac
-  value="${OPENCODE_WEB_RETENTION_DAYS}"
-  while [ "${value#0}" != "$value" ]; do value="${value#0}"; done
-  OPENCODE_WEB_RETENTION_DAYS="${value:-0}"
-}
-
-validate_positive_integer() {
-  local name="$1" value="$2"
-  if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
-    die "${name} must be a positive integer (received '${value:-unset}')."
-  fi
-  if [ "${#value}" -gt 10 ] || { [ "${#value}" -eq 10 ] && (( value > 2147483647 )); }; then
-    die "${name} is outside the supported positive integer range (received '${value}')."
-  fi
-}
-
 log() {
   printf '%s\n' "[opencode_web_yolo] $*"
 }
@@ -86,40 +64,9 @@ require_command() {
 }
 
 version_gt() {
-  local left="$1" right="$2"
-  local left_major left_minor left_patch right_major right_minor right_patch
-
-  [[ "$left" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
-  left_major="${BASH_REMATCH[1]}"
-  left_minor="${BASH_REMATCH[2]}"
-  left_patch="${BASH_REMATCH[3]}"
-  [[ "$right" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
-  right_major="${BASH_REMATCH[1]}"
-  right_minor="${BASH_REMATCH[2]}"
-  right_patch="${BASH_REMATCH[3]}"
-
-  while [ "${left_major#0}" != "$left_major" ]; do left_major="${left_major#0}"; done
-  while [ "${left_minor#0}" != "$left_minor" ]; do left_minor="${left_minor#0}"; done
-  while [ "${left_patch#0}" != "$left_patch" ]; do left_patch="${left_patch#0}"; done
-  while [ "${right_major#0}" != "$right_major" ]; do right_major="${right_major#0}"; done
-  while [ "${right_minor#0}" != "$right_minor" ]; do right_minor="${right_minor#0}"; done
-  while [ "${right_patch#0}" != "$right_patch" ]; do right_patch="${right_patch#0}"; done
-  left_major="${left_major:-0}"
-  left_minor="${left_minor:-0}"
-  left_patch="${left_patch:-0}"
-  right_major="${right_major:-0}"
-  right_minor="${right_minor:-0}"
-  right_patch="${right_patch:-0}"
-
-  if ((left_major != right_major)); then
-    ((left_major > right_major))
-  elif ((left_minor != right_minor)); then
-    ((left_minor > right_minor))
-  elif ((left_patch != right_patch)); then
-    ((left_patch > right_patch))
-  else
-    return 1
-  fi
+  local left="$1"
+  local right="$2"
+  [ "$left" != "$right" ] && [ "$(printf '%s\n%s\n' "$left" "$right" | sort -V | tail -n 1)" = "$left" ]
 }
 
 expand_tilde() {
@@ -163,15 +110,12 @@ resolve_repo_from_origin() {
   esac
 }
 
-fallback_managed_files() {
+managed_files() {
   cat <<'EOF'
-.opencode_web_yolo.manifest
 .opencode_web_yolo.sh
 .opencode_web_yolo_config.sh
 .opencode_web_yolo.Dockerfile
 .opencode_web_yolo_entrypoint.sh
-.opencode_web_yolo_runtime.sh
-.opencode_web_yolo_retention.js
 .opencode_web_yolo_completion.bash
 .opencode_web_yolo_completion.zsh
 install.sh
@@ -179,224 +123,11 @@ VERSION
 CHANGELOG.md
 README.md
 TECHNICAL.md
-LICENSE
-CODEOWNERS
 EOF
 }
 
-manifest_has_canonical_files() {
-  local manifest_file="$1" canonical_file manifest_entry
-  local seen_manifest_file
-
-  [ -f "$manifest_file" ] || return 1
-  [ -s "$manifest_file" ] || return 1
-  seen_manifest_file="$(mktemp "${TMPDIR:-/tmp}/opencode_web_yolo-manifest.XXXXXX")" || return 1
-
-  while IFS= read -r manifest_entry || [ -n "$manifest_entry" ]; do
-    [ -n "$manifest_entry" ] || continue
-    case "$manifest_entry" in
-      *[!A-Za-z0-9._-]*) rm -f "$seen_manifest_file"; return 1 ;;
-    esac
-    if grep -Fqx -- "$manifest_entry" "$seen_manifest_file"; then
-      rm -f "$seen_manifest_file"
-      return 1
-    fi
-    if ! printf '%s\n' "$manifest_entry" >>"$seen_manifest_file"; then
-      rm -f "$seen_manifest_file"
-      return 1
-    fi
-  done <"$manifest_file"
-
-  while IFS= read -r canonical_file; do
-    if ! grep -Fqx -- "$canonical_file" "$manifest_file"; then
-      rm -f "$seen_manifest_file"
-      return 1
-    fi
-  done < <(fallback_managed_files)
-  rm -f "$seen_manifest_file"
-}
-
-managed_files_for_dir() {
-  local source_dir="$1"
-  local manifest_file="${source_dir}/.opencode_web_yolo.manifest"
-
-  if manifest_has_canonical_files "$manifest_file"; then
-    cat "$manifest_file"
-  else
-    fallback_managed_files
-  fi
-}
-
-validate_managed_tree() {
-  local source_dir="$1" manifest_file required_file required_path version
-
-  manifest_file="${source_dir}/.opencode_web_yolo.manifest"
-  if [ -e "$manifest_file" ] && ! manifest_has_canonical_files "$manifest_file"; then
-    return 1
-  fi
-
-  while IFS= read -r required_file || [ -n "$required_file" ]; do
-    [ -n "$required_file" ] || continue
-    required_path="${source_dir}/${required_file}"
-    [ -f "$required_path" ] || return 1
-    [ ! -L "$required_path" ] || return 1
-    [ -s "$required_path" ] || return 1
-    case "$required_file" in
-      *.sh|*.bash)
-        bash -n "$required_path" >/dev/null 2>&1 || return 1
-        ;;
-    esac
-  done < <(managed_files_for_dir "$source_dir")
-
-  version="$(tr -d '[:space:]' <"${source_dir}/VERSION")"
-  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-}
-
-url_encode_branch() {
-  local branch="$1" encoded="" character byte index
-
-  for ((index = 0; index < ${#branch}; index++)); do
-    character="${branch:index:1}"
-    case "$character" in
-      [A-Za-z0-9._~-]|/) encoded+="$character" ;;
-      *)
-        printf -v byte '%02X' "'${character}"
-        encoded+="%${byte}"
-        ;;
-    esac
-  done
-  printf '%s\n' "$encoded"
-}
-
-validate_archive_path() {
-  local path="$1" component remainder
-
-  case "$path" in
-    ""|/*|*//* ) return 1 ;;
-  esac
-  remainder="$path"
-  while :; do
-    if [[ "$remainder" == */* ]]; then
-      component="${remainder%%/*}"
-      remainder="${remainder#*/}"
-    else
-      component="$remainder"
-      remainder=""
-    fi
-    case "$component" in
-      ""|.|..) return 1 ;;
-    esac
-    [ -n "$remainder" ] || break
-  done
-}
-
-validate_archive_contents() {
-  local archive_file="$1" archive_root="" archive_entry relative_entry listing type_char
-  local root_directory_seen=0
-
-  if ! tar -tzf "$archive_file" >/dev/null 2>&1 || ! tar -tvzf "$archive_file" >/dev/null 2>&1; then
-    return 1
-  fi
-  while IFS= read -r listing; do
-    [ -n "$listing" ] || continue
-    type_char="${listing:0:1}"
-    case "$type_char" in
-      -|d) ;;
-      *) return 1 ;;
-    esac
-  done < <(tar -tvzf "$archive_file")
-
-  while IFS= read -r archive_entry; do
-    [ -n "$archive_entry" ] || continue
-    case "$archive_entry" in
-      */*)
-        archive_root="${archive_entry%%/*}"
-        break
-        ;;
-      *) return 1 ;;
-    esac
-  done < <(tar -tzf "$archive_file")
-  validate_archive_path "$archive_root" || return 1
-  while IFS= read -r archive_entry; do
-    [ -n "$archive_entry" ] || continue
-    case "$archive_entry" in
-      "${archive_root}/"*)
-        relative_entry="${archive_entry#"${archive_root}/"}"
-        validate_archive_path "$archive_entry" || return 1
-        [ -n "$relative_entry" ] || root_directory_seen=1
-        ;;
-      *) return 1 ;;
-    esac
-  done < <(tar -tzf "$archive_file")
-  [ "$root_directory_seen" -eq 1 ] || return 1
-}
-
-download_release_snapshot() {
-  local destination_dir="$1" repo="$2" branch="$3"
-  local archive_file extract_dir archive_url
-
-  require_command tar
-  branch="$(url_encode_branch "$branch")"
-  archive_url="https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz"
-  archive_file="${destination_dir}/release.tar.gz"
-  extract_dir="${destination_dir}/release"
-  mkdir -p "$extract_dir"
-
-  if ! curl -fsSL "$archive_url" -o "$archive_file"; then
-    die "Failed downloading release archive from ${archive_url}."
-  fi
-  if ! validate_archive_contents "$archive_file"; then
-    die "Downloaded release archive from ${repo}@${branch} is malformed or truncated."
-  fi
-
-  if ! tar -xzf "$archive_file" -C "$extract_dir" --strip-components=1; then
-    die "Failed extracting release archive from ${repo}@${branch}."
-  fi
-  printf '%s\n' "$extract_dir"
-}
-
-promote_release() {
-  local source_dir="$1" install_home="$2" managed_file source_file destination_file
-
-  mkdir -p "$install_home"
-  chmod +x "${source_dir}/.opencode_web_yolo.sh" "${source_dir}/.opencode_web_yolo_entrypoint.sh" "${source_dir}/install.sh"
-  while IFS= read -r managed_file || [ -n "$managed_file" ]; do
-    [ -n "$managed_file" ] || continue
-    case "$managed_file" in
-      .opencode_web_yolo.sh|VERSION) continue ;;
-    esac
-    source_file="${source_dir}/${managed_file}"
-    destination_file="${install_home}/${managed_file}"
-    mkdir -p "$(dirname "$destination_file")"
-    # Test-only interruption hook; normal installs never set this variable.
-    if [ "${OPENCODE_WEB_YOLO_TEST_FAIL_PROMOTION_ON:-}" = "$managed_file" ]; then
-      die "Test promotion interruption requested for '${managed_file}'."
-    fi
-    mv -f "$source_file" "$destination_file"
-  done < <(managed_files_for_dir "$source_dir")
-
-  mv -f "${source_dir}/.opencode_web_yolo.sh" "${install_home}/.opencode_web_yolo.sh"
-  if [ "${OPENCODE_WEB_YOLO_TEST_FAIL_PROMOTION_ON:-}" = "after-wrapper" ]; then
-    die "Test promotion interruption requested after wrapper promotion."
-  fi
-  mv -f "${source_dir}/VERSION" "${install_home}/VERSION"
-}
-
 apply_self_update() {
-  local install_home repo branch branch_url local_version remote_version remote_base tmpdir staged_dir
-  local local_complete=1 staged_version
-
-  if ! validate_managed_tree "$SCRIPT_DIR"; then
-    local_complete=0
-  fi
-
-  if is_true "${OPENCODE_WEB_UPDATE_REEXECED:-0}"; then
-    if [ "$local_complete" -ne 1 ]; then
-      die "Managed install is incomplete after self-update; refusing to build or re-exec."
-    fi
-    debug "Self-update re-exec already completed; skipping another update check."
-    return 0
-  fi
+  local install_home repo branch local_version remote_version remote_base tmpdir managed_file src_file dst_file
 
   if is_true "${OPENCODE_WEB_SKIP_UPDATE_CHECK}"; then
     debug "Skipping update check because OPENCODE_WEB_SKIP_UPDATE_CHECK is enabled."
@@ -426,52 +157,44 @@ apply_self_update() {
   fi
 
   local_version="$WRAPPER_VERSION"
-  branch_url="$(url_encode_branch "$branch")"
-  remote_base="https://raw.githubusercontent.com/${repo}/${branch_url}"
+  remote_base="https://raw.githubusercontent.com/${repo}/${branch}"
   if ! remote_version="$(curl -fsSL "${remote_base}/VERSION" | tr -d '[:space:]')"; then
     warn "Update check failed while reading remote VERSION from ${repo}@${branch}. Continuing with local files."
     return 0
   fi
-  if [[ ! "$remote_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    warn "Ignoring invalid remote VERSION '${remote_version}' from ${repo}@${branch}."
-    return 0
-  fi
 
-  if [ "$local_complete" -eq 1 ] && ! version_gt "$remote_version" "$local_version"; then
+  if ! version_gt "$remote_version" "$local_version"; then
     debug "Local version (${local_version}) is up to date."
     return 0
   fi
 
-  if version_gt "$remote_version" "$local_version"; then
-    log "Updating wrapper from ${local_version} to ${remote_version}."
-  else
-    log "Repairing incomplete managed install at version ${local_version}."
-  fi
+  log "Updating wrapper from ${local_version} to ${remote_version}."
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "$tmpdir"' EXIT
 
-  mkdir -p "$(dirname "$install_home")" "$install_home"
-  tmpdir="$(mktemp -d "${install_home}/.opencode_web_yolo-update.XXXXXX")"
-  trap 'rm -rf "${tmpdir:-}"' EXIT
-  staged_dir="$(download_release_snapshot "$tmpdir" "$repo" "$branch")"
-  if ! validate_managed_tree "$staged_dir"; then
-    die "Downloaded release archive from ${repo}@${branch} is missing, empty, or contains invalid managed files."
-  fi
-  staged_version="$(tr -d '[:space:]' <"${staged_dir}/VERSION")"
-  if [ "$staged_version" != "$remote_version" ]; then
-    die "Remote VERSION changed during self-update (checked ${remote_version}, archive contains ${staged_version}); refusing promotion."
-  fi
-  if ! version_gt "$staged_version" "$local_version" && [ "$local_complete" -eq 1 ]; then
-    die "Release archive version ${staged_version} cannot update local version ${local_version}."
-  fi
-  if [ "$local_complete" -eq 0 ] && version_gt "$local_version" "$staged_version"; then
-    die "Cannot repair incomplete version ${local_version} from older release ${staged_version}."
-  fi
+  while IFS= read -r managed_file; do
+    src_file="${remote_base}/${managed_file}"
+    dst_file="${tmpdir}/${managed_file}"
+    mkdir -p "$(dirname "$dst_file")"
+    if ! curl -fsSL "$src_file" -o "$dst_file"; then
+      die "Failed downloading '${managed_file}' during self-update."
+    fi
+  done < <(managed_files)
 
-  promote_release "$staged_dir" "$install_home"
+  while IFS= read -r managed_file; do
+    dst_file="${install_home}/${managed_file}"
+    mkdir -p "$(dirname "$dst_file")"
+    cp "${tmpdir}/${managed_file}" "$dst_file"
+  done < <(managed_files)
+
+  chmod +x "${install_home}/.opencode_web_yolo.sh"
+  chmod +x "${install_home}/.opencode_web_yolo_entrypoint.sh"
+  chmod +x "${install_home}/install.sh"
+
   rm -rf "$tmpdir"
   trap - EXIT
 
   log "Update complete, re-executing wrapper."
-  export OPENCODE_WEB_UPDATE_REEXECED=1
   exec "${install_home}/.opencode_web_yolo.sh" "${ORIGINAL_ARGS[@]}"
 }
 
@@ -491,8 +214,6 @@ Wrapper flags:
   --no-pull              Skip default pull-on-start behavior for this run.
   --playwright           Build runtime image with Playwright Chromium.
   --wrangler             Build Wrangler and mount host Wrangler config read-write.
-  --retention-days N     Delete inactive root sessions older than N days (0 disables).
-  --retention-days=N     Same as above, using an equals-form value.
   --agents-file PATH     Mount a host AGENTS.md file read-only.
   --no-host-agents       Skip mounting host AGENTS.md.
   --dry-run              Print docker command and exit.
@@ -517,7 +238,6 @@ Lifecycle defaults:
   Restart policy: ${OPENCODE_WEB_RESTART_POLICY}
   Background mode: ${OPENCODE_WEB_RUN_DETACHED}
   Pull-on-start: ${OPENCODE_WEB_AUTO_PULL}
-  Session retention: ${OPENCODE_WEB_RETENTION_DAYS} days (0 disables)
 
 First-time setup:
   1) Create config file:
@@ -569,12 +289,6 @@ export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 # This explicit pin remains effective even when version checks are skipped.
 # export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=1.62.1
 export OPENCODE_WEB_BUILD_WRANGLER=0
-export OPENCODE_WEB_RETENTION_DAYS=0
-# Set OPENCODE_WEB_RETENTION_DAYS to a non-negative integer to enable weekly cleanup.
-# export OPENCODE_WEB_RETENTION_DRY_RUN=1
-export OPENCODE_WEB_RETENTION_POLL_SECONDS=3600
-export OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS=10000
-export OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS=10000
 export OPENCODE_WEB_SKIP_UPDATE_CHECK=0
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 # Required: set a non-empty password before running the server.
@@ -615,13 +329,6 @@ show_health() {
   printf '%s\n' "  build_pull=${OPENCODE_WEB_BUILD_PULL}"
   printf '%s\n' "  build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
   printf '%s\n' "  build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
-  printf '%s\n' "  retention_days=${OPENCODE_WEB_RETENTION_DAYS}"
-  printf '%s\n' "  retention_dry_run=${OPENCODE_WEB_RETENTION_DRY_RUN}"
-  printf '%s\n' "  retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
-  printf '%s\n' "  retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
-  printf '%s\n' "  retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
-  printf '%s\n' "  retention_schedule=after-health-at-most-weekly"
-  printf '%s\n' "  retention_marker=${runtime_xdg_state}/session-retention.last-success"
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
   printf '%s\n' "  runtime_env_xdg_data_home=${runtime_xdg_data}"
@@ -952,14 +659,6 @@ main() {
         OPENCODE_WEB_BUILD_WRANGLER=1
         use_wrangler=1
         ;;
-      --retention-days=*)
-        OPENCODE_WEB_RETENTION_DAYS="${1#*=}"
-        ;;
-      --retention-days)
-        shift
-        [ "$#" -gt 0 ] || die "--retention-days requires a non-negative integer value."
-        OPENCODE_WEB_RETENTION_DAYS="$1"
-        ;;
       --agents-file=*)
         host_agents_enabled=1
         host_agents_source="flag"
@@ -1024,13 +723,6 @@ main() {
   OPENCODE_WEB_RUN_DETACHED="$(normalize_bool "${OPENCODE_WEB_RUN_DETACHED}")"
   OPENCODE_WEB_SKIP_UPDATE_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_UPDATE_CHECK}")"
   OPENCODE_WEB_SKIP_VERSION_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_VERSION_CHECK}")"
-  OPENCODE_WEB_RETENTION_DRY_RUN="$(normalize_bool "${OPENCODE_WEB_RETENTION_DRY_RUN}")"
-  validate_retention_days
-  if [ "$OPENCODE_WEB_RETENTION_DAYS" != "0" ]; then
-    validate_positive_integer OPENCODE_WEB_RETENTION_POLL_SECONDS "${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
-    validate_positive_integer OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS "${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
-    validate_positive_integer OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS "${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
-  fi
 
   case "$mode" in
     version)
@@ -1053,16 +745,11 @@ main() {
 
   apply_self_update
 
-  if ! validate_managed_tree "$SCRIPT_DIR"; then
-    die "Managed install is incomplete or invalid; refusing to build or launch Docker. Re-run install.sh to repair it."
-  fi
-
   if is_true "${OPENCODE_WEB_AUTO_PULL}"; then
     OPENCODE_WEB_BUILD_PULL=1
   fi
 
   require_password
-  export OPENCODE_SERVER_PASSWORD
   require_command docker
   docker info >/dev/null 2>&1 || die "Docker daemon is not available."
   [ -n "${OPENCODE_WEB_CONTAINER_NAME}" ] || die "OPENCODE_WEB_CONTAINER_NAME must be non-empty."
@@ -1086,14 +773,8 @@ main() {
     -e "LOCAL_USER=$(id -un)"
     -e "OPENCODE_WEB_YOLO_CLEANUP=${OPENCODE_WEB_YOLO_CLEANUP}"
     -e "OPENCODE_WEB_YOLO_HOME=${OPENCODE_WEB_YOLO_HOME}"
-    -e OPENCODE_SERVER_PASSWORD
+    -e "OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}"
     -e "OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
-    -e "OPENCODE_WEB_PORT=${OPENCODE_WEB_PORT}"
-    -e "OPENCODE_WEB_RETENTION_DAYS=${OPENCODE_WEB_RETENTION_DAYS}"
-    -e "OPENCODE_WEB_RETENTION_DRY_RUN=${OPENCODE_WEB_RETENTION_DRY_RUN}"
-    -e "OPENCODE_WEB_RETENTION_POLL_SECONDS=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
-    -e "OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
-    -e "OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
     -e "HOME=${runtime_home}"
     -e "XDG_CONFIG_HOME=${runtime_xdg_config}"
     -e "XDG_DATA_HOME=${runtime_xdg_data}"
@@ -1182,7 +863,7 @@ main() {
     host_agents_log="Host instruction file mount disabled by --no-host-agents."
   fi
 
-  app_cmd=(opencode serve --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
+  app_cmd=(opencode web --hostname "${OPENCODE_WEB_HOSTNAME}" --port "${OPENCODE_WEB_PORT}")
   app_cmd+=("${passthrough[@]}")
 
   ensure_image
@@ -1202,20 +883,13 @@ main() {
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
     printf '%s\n' "build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
     printf '%s\n' "build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
-    printf '%s\n' "retention_days=${OPENCODE_WEB_RETENTION_DAYS}"
-    printf '%s\n' "retention_dry_run=${OPENCODE_WEB_RETENTION_DRY_RUN}"
-    printf '%s\n' "retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
-    printf '%s\n' "retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
-    printf '%s\n' "retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
-    printf '%s\n' "retention_schedule=after-health-at-most-weekly"
-    printf '%s\n' "retention_marker=${runtime_xdg_state}/session-retention.last-success"
     printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
     printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"
     printf '%s\n' "runtime_env_home=${runtime_home}"
     printf '%s\n' "runtime_env_xdg_config_home=${runtime_xdg_config}"
     printf '%s\n' "runtime_env_xdg_data_home=${runtime_xdg_data}"
     printf '%s\n' "runtime_env_xdg_state_home=${runtime_xdg_state}"
-    printf '%s\n' "command=opencode serve --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
+    printf '%s\n' "command=opencode web --hostname ${OPENCODE_WEB_HOSTNAME} --port ${OPENCODE_WEB_PORT}"
     printf '%s\n' "env.OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
     printf '%s\n' "host_agents_source=${host_agents_source}"
     printf '%s\n' "host_agents_path=${host_agents_path}"
