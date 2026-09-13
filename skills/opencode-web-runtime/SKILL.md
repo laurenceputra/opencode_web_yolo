@@ -25,8 +25,8 @@ Load only the file that matches the active task:
 Enforce these contracts on every runtime change:
 - Require `OPENCODE_SERVER_PASSWORD`; fail fast when empty or unset.
 - Publish local-only by default: `-p 127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`.
-- Run OpenCode Web with host `0.0.0.0` and configured port unless explicitly overridden.
-- Install and expose `gh`, `git`, and SSH client binaries inside the image.
+- Run `opencode serve` with host `0.0.0.0` and configured port unless explicitly overridden.
+- Install and expose `gh`, `git`, SSH client binaries, and `sqlite3` inside the image.
 - Persist both OpenCode config and state directories across restarts.
 - Show explicit warnings before enabling sensitive mounts (`-gh`, `--mount-ssh`).
 - Keep entrypoint ownership setup compatible with read-only sensitive mounts.
@@ -43,6 +43,7 @@ Enforce these contracts on every runtime change:
 4. Emit identical run args for normal run and dry-run previews.
 5. Keep diagnostics independent of container startup.
 6. In entrypoint, map UID/GID, ensure writable runtime dirs, avoid recursive chown on read-only mounts, then exec via `gosu`.
+7. After ownership and HOME/XDG exports, inspect `${XDG_DATA_HOME}/opencode/opencode.db`. If present, run startup `VACUUM;` via `sqlite3` and `gosu` as the mapped user with a 5000 ms busy timeout; GNU `timeout` sends TERM after 300 seconds and KILL 5 seconds later if needed. Skip missing databases without creating them and warn/continue on failures or timeout expiry. This is separate from retention's no-raw-SQL worker guarantee.
 
 # Retention lifecycle
 
@@ -62,8 +63,8 @@ Enforce these contracts on every runtime change:
 # Done Criteria
 
 Consider runtime work complete only when:
-- Password checks, local-only port publishing, and OpenCode web launch command match the plan.
+- Password checks, local-only port publishing, and `opencode serve` launch command match the plan.
 - `-gh` verifies host `gh` presence and auth status before mounting.
 - `--mount-ssh` mounts read-only and warns clearly.
-- OpenCode state persists across restarts without re-authentication churn.
+- OpenCode state persists across restarts without re-authentication churn, and existing databases receive best-effort startup VACUUM maintenance with TERM/KILL timeout escalation.
 - Dry-run and diagnostics reflect actual runtime behavior.

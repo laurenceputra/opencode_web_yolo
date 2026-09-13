@@ -17,6 +17,7 @@ RUN apt-get update \
     gosu \
     openssh-client \
     passwd \
+    sqlite3 \
     sudo \
     tini \
   && rm -rf /var/lib/apt/lists/*

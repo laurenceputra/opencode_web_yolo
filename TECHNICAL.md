@@ -4,7 +4,7 @@
 
 - Host command: `opencode_web_yolo`
 - Wrapper builds/validates runtime image and runs:
-  - `opencode web --hostname 0.0.0.0 --port ${OPENCODE_WEB_PORT}`
+  - `opencode serve --hostname 0.0.0.0 --port ${OPENCODE_WEB_PORT}`
 - Docker publish contract:
   - `-p 127.0.0.1:${OPENCODE_WEB_PORT}:${OPENCODE_WEB_PORT}`
 - Container lifecycle defaults:
@@ -76,6 +76,8 @@ Docker image includes:
 - `gh`
 - `git`
 - `openssh-client`
+- `sqlite3`
+- Debian coreutils `timeout`
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - PID 1 init/subreaper (`tini`)
 - OpenCode CLI (`opencode-ai` npm package by default)
@@ -103,6 +105,7 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
+- after ownership and HOME/XDG setup, checks `${XDG_DATA_HOME}/opencode/opencode.db`; when present, runs `VACUUM;` through `sqlite3` via `gosu` as the mapped user with a 5000 ms busy timeout. GNU `timeout` sends TERM after 300 seconds and KILL 5 seconds later if the command remains alive. Missing databases are skipped without creation. Vacuum failures or timeout expiry warn to stderr and do not block either direct or retention-supervised OpenCode launch. This startup maintenance is separate from retention, whose worker never uses raw SQL or mutates SQLite WAL/SHM files.
 - when retention is enabled, starts OpenCode, waits for authenticated `/global/health`, and supervises a mapped-user scheduler; TERM/INT are forwarded and the app exit status is returned.
 - Docker starts `tini -s -g` so orphaned descendants are reaped and TERM/INT are forwarded to the child process group. The supervisor preserves the received signal when forwarding it to the app.
 - does not inject unsupported OpenCode CLI flags for instruction loading.
@@ -175,14 +178,14 @@ Controls:
 - Update `VERSION` and `CHANGELOG.md` together.
 - Run `bash tests/run.sh`.
 - Run `bash -n` and `shellcheck` for touched shell scripts.
-- Build the runtime image and verify required binaries (`gh`, `git`, `ssh`).
+- Build the runtime image and verify required binaries (`gh`, `git`, `ssh`, `sqlite3`) plus `opencode serve --help`.
 - Verify README/TECHNICAL accuracy for any behavior changes.
 
 ## Test and CI Strategy
 
 Tests and CI assert:
 - `bash -n` and `shellcheck` on touched shell scripts.
-- dry-run output contract (local-only port mapping, opencode web command, env values, config/data mounts, lifecycle flags, detach/pull defaults).
+- dry-run output contract (local-only port mapping, `opencode serve` command, env values, config/data mounts, lifecycle flags, detach/pull defaults).
 - launch behavior replaces same-name containers by stopping running instances, then removing the old container before re-run.
 - password gate behavior when `OPENCODE_SERVER_PASSWORD` is missing.
 - `-gh` validation/mount behavior and `--mount-ssh` explicit warning/mount behavior.
@@ -191,5 +194,6 @@ Tests and CI assert:
 - health output includes browser-vs-server persistence scope visibility.
 - retention configuration, marker path, API schedule, and dry-run state.
 - retention API compatibility, active-session skipping, serial deletion, marker retry semantics, and supervisor signal/exit behavior.
-- Docker image build and runtime binary presence (`gh`, `git`, `ssh`).
+- Docker image build and runtime binary presence (`gh`, `git`, `ssh`, `sqlite3`), including a successful `opencode serve --help` check.
+- startup VACUUM behavior for existing and missing databases, custom XDG data paths, mapped-user invocation, SQLite timeout plus TERM/KILL escalation, warning-only failures, and continued application execution.
 - `VERSION` semver format and runtime-file/version drift guard.

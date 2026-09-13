@@ -28,10 +28,12 @@ jobs:
           bash -n tests/test_entrypoint_auth_guard.sh
           bash -n tests/test_entrypoint_instruction_flag.sh
           bash -n tests/test_entrypoint_home_pin.sh
+          bash -n tests/test_startup_vacuum.sh
           bash -n tests/test_docs_apache_endpoints.sh
           bash -n tests/test_help.sh
           bash -n tests/test_playwright_dockerfile_contract.sh
           bash -n tests/test_version_command.sh
+          bash -n tests/test_version_guard.sh
           bash -n tests/test_self_update.sh
           bash -n tests/test_install_bootstrap.sh
           bash -n tests/test_auth_required.sh
@@ -61,10 +63,12 @@ jobs:
           shellcheck -x tests/test_entrypoint_auth_guard.sh
           shellcheck -x tests/test_entrypoint_instruction_flag.sh
           shellcheck -x tests/test_entrypoint_home_pin.sh
+          shellcheck -x tests/test_startup_vacuum.sh
           shellcheck -x tests/test_docs_apache_endpoints.sh
           shellcheck -x tests/test_help.sh
           shellcheck -x tests/test_playwright_dockerfile_contract.sh
           shellcheck -x tests/test_version_command.sh
+          shellcheck -x tests/test_version_guard.sh
           shellcheck -x tests/test_self_update.sh
           shellcheck -x tests/test_install_bootstrap.sh
           shellcheck -x tests/test_auth_required.sh
@@ -110,7 +114,116 @@ jobs:
         run: docker build -f .opencode_web_yolo.Dockerfile -t opencode_web_yolo:ci .
       - name: Validate required binaries
         run: |
-          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v tini'
+          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v sqlite3 && command -v timeout && command -v tini && opencode serve --help'
+      - name: Validate real startup VACUUM
+        run: |
+          set -euo pipefail
+          data_dir="$(mktemp -d)"
+          trap 'rm -rf "$data_dir"' EXIT
+          mkdir -p "${data_dir}/opencode"
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${data_dir}:/data" \
+            --entrypoint sqlite3 \
+            opencode_web_yolo:ci /data/opencode/opencode.db \
+            'CREATE TABLE retained (id INTEGER PRIMARY KEY, value TEXT);
+             CREATE TABLE bulky (payload BLOB);
+             INSERT INTO retained(value) VALUES (zeroblob(4));
+             WITH RECURSIVE seq(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM seq WHERE i < 2000)
+             INSERT INTO bulky(payload) SELECT zeroblob(4096) FROM seq;
+             DELETE FROM bulky;'
+
+          before_freelist="$(docker run --rm \
+            -v "${data_dir}:/data" \
+            --entrypoint sqlite3 \
+            opencode_web_yolo:ci /data/opencode/opencode.db 'PRAGMA freelist_count;')"
+          test "${before_freelist}" -gt 0
+
+          vacuum_output="$(docker run --rm \
+            -e LOCAL_UID="$(id -u)" \
+            -e LOCAL_GID="$(id -g)" \
+            -e LOCAL_USER=ci \
+            -e OPENCODE_SERVER_PASSWORD=ci-secret \
+            -e OPENCODE_WEB_RETENTION_DAYS=0 \
+            -e XDG_DATA_HOME=/data \
+            -v "${data_dir}:/data" \
+            --entrypoint /usr/local/bin/opencode_web_yolo_entrypoint.sh \
+            opencode_web_yolo:ci true 2>&1)"
+          case "${vacuum_output}" in
+            *"VACUUM: compacting OpenCode database at /data/opencode/opencode.db."*) ;;
+            *) printf '%s\n' "${vacuum_output}" >&2; exit 1 ;;
+          esac
+          case "${vacuum_output}" in
+            *WARNING*) printf '%s\n' "${vacuum_output}" >&2; exit 1 ;;
+          esac
+
+          retained_rows="$(docker run --rm \
+            -v "${data_dir}:/data" \
+            --entrypoint sqlite3 \
+            opencode_web_yolo:ci /data/opencode/opencode.db 'SELECT count(*) FROM retained;')"
+          after_freelist="$(docker run --rm \
+            -v "${data_dir}:/data" \
+            --entrypoint sqlite3 \
+            opencode_web_yolo:ci /data/opencode/opencode.db 'PRAGMA freelist_count;')"
+          test "${retained_rows}" = 1
+          test "${after_freelist}" = 0
+      - name: Smoke test authenticated opencode serve
+        run: |
+          set -euo pipefail
+          smoke_dir="$(mktemp -d)"
+          container_name=opencode_web_yolo_ci_smoke
+          host_port=4097
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            if [ "${status}" -ne 0 ]; then
+              docker logs "${container_name}" || true
+            fi
+            docker rm -f "${container_name}" >/dev/null 2>&1 || true
+            rm -rf "${smoke_dir}"
+            exit "${status}"
+          }
+          trap cleanup EXIT
+          mkdir -p "${smoke_dir}/config" "${smoke_dir}/data"
+
+          docker run -d \
+            --name "${container_name}" \
+            --restart unless-stopped \
+            -p "127.0.0.1:${host_port}:${host_port}" \
+            -e LOCAL_UID="$(id -u)" \
+            -e LOCAL_GID="$(id -g)" \
+            -e LOCAL_USER=ci \
+            -e OPENCODE_SERVER_PASSWORD=ci-secret \
+            -e OPENCODE_SERVER_USERNAME=opencode \
+            -e OPENCODE_WEB_PORT="${host_port}" \
+            -e HOME=/home/opencode \
+            -e XDG_CONFIG_HOME=/home/opencode/.config \
+            -e XDG_DATA_HOME=/home/opencode/.local/share \
+            -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state \
+            -v "${smoke_dir}/config:/home/opencode/.config/opencode" \
+            -v "${smoke_dir}/data:/home/opencode/.local/share/opencode" \
+            opencode_web_yolo:ci \
+            opencode serve --hostname 0.0.0.0 --port "${host_port}" >/dev/null
+
+          healthy=0
+          unauthenticated_status=''
+          health_body=''
+          for attempt in $(seq 1 60); do
+            if unauthenticated_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${host_port}/global/health" 2>/dev/null)" \
+              && [ "${unauthenticated_status}" = 401 ] \
+              && health_body="$(curl -fsS --max-time 2 -u 'opencode:ci-secret' "http://127.0.0.1:${host_port}/global/health" 2>/dev/null)" \
+              && node -e 'const value = JSON.parse(process.argv[1]); process.exit(value && value.healthy === true ? 0 : 1)' "${health_body}"; then
+              healthy=1
+              break
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null || true)" != true ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "${unauthenticated_status}" = 401
+          test "${healthy}" = 1
       - name: Build Playwright-enabled runtime image
         run: |
           docker build \
@@ -138,6 +251,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Validate version format and drift guard
+        env:
+          VERSION_GUARD_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: bash tests/version_guard.sh

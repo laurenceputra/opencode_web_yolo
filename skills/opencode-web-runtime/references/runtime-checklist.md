@@ -28,11 +28,13 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - If runtime process user differs from image default user, explicitly pin `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` to mounted persistence paths.
 - Avoid recursive ownership operations on paths that can contain read-only mounts.
 - Use `gosu` handoff for final command execution.
-- Run OpenCode web with configured host and port.
+- Run `opencode serve` with configured host and port.
+- Provide `sqlite3` and Debian coreutils `timeout` in the image and, after mapped-user ownership plus HOME/XDG exports, best-effort VACUUM an existing `${XDG_DATA_HOME}/opencode/opencode.db` as the mapped user via `gosu` with a 5000 ms busy timeout. GNU `timeout` must send TERM after 300 seconds and KILL 5 seconds later if needed. Missing databases must not be created; failures or timeout expiry warn and do not block direct or retention-supervised launch.
 - Preserve provider/auth state across restart by mounting host OpenCode data directory.
 - Keep Playwright opt-in: `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config is durable, while `--playwright` is one-shot.
 - Retention is opt-in with non-negative `OPENCODE_WEB_RETENTION_DAYS`; its scheduler starts only after authenticated health, runs as the mapped user, and persists a success marker under `XDG_STATE_HOME`.
 - Retention must use authenticated complete `/experimental/session` pagination, `/session/status` for every involved directory, direct `/session/:id` refresh/verification, and serial `DELETE /session/:id` calls; validate compatibility and fail closed without raw SQL/WAL/SHM mutation.
+- Startup VACUUM is separate from retention: retention remains an API-only, no-raw-SQL worker and must not manually touch SQLite WAL/SHM/journal sidecars.
 - Map every listed session to a root across directories; block a mapped root when status reports a busy/retrying descendant, fail closed on unmapped active IDs or malformed hierarchies, refresh/recheck immediately before each delete, verify direct 404 before marker advancement, and reject unsafe equal-timestamp page boundaries. The API has no atomic delete-if-idle guarantee.
 - Validate positive worker fetch and scheduler poll timeouts; use `tini -s -g` for PID1 subreaping/group signal forwarding and preserve SIGINT semantics.
 - When enabled, install global `@playwright/test` at an explicit version, run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
