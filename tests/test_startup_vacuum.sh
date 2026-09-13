@@ -79,9 +79,10 @@ export PATH="${FAKE_BIN}:${PATH}"
 export OPENCODE_SERVER_PASSWORD=secret
 export OPENCODE_WEB_TEST_GOSU_LOG="$GOSU_LOG"
 export OPENCODE_WEB_TEST_SQLITE_LOG="$SQLITE_LOG"
-export LOCAL_UID="$(id -u)"
-export LOCAL_GID="$(id -g)"
-export LOCAL_USER="$(id -un)"
+LOCAL_UID="$(id -u)"
+LOCAL_GID="$(id -g)"
+LOCAL_USER="$(id -un)"
+export LOCAL_UID LOCAL_GID LOCAL_USER
 
 run_entrypoint() {
   local home="$1" data_home="$2"

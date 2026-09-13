@@ -9,40 +9,41 @@ if ! grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION; then
   exit 1
 fi
 
-head_object="$(git cat-file -p HEAD 2>/dev/null || true)"
-parent_refs=""
-while IFS= read -r line; do
-  case "$line" in
-    parent\ *) parent_refs="${parent_refs}${line#parent } " ;;
-  esac
-done <<<"$head_object"
-parent_refs="${parent_refs% }"
+if ! parent_refs="$(git show -s --format=%P HEAD 2>/dev/null)"; then
+  printf '%s\n' "Unable to inspect HEAD parents; cannot verify runtime-file/version drift." >&2
+  exit 1
+fi
+
 first_parent="${parent_refs%% *}"
+version_guard_base_ref="${VERSION_GUARD_BASE_REF:-}"
 
 if [ -z "$first_parent" ]; then
-  printf '%s\n' "No parent commit found; skipping runtime-file/version drift check."
-  exit 0
-fi
-
-if ! git cat-file -e "${first_parent}^{commit}" >/dev/null 2>&1; then
-  printf '%s\n' "Parent commit history unavailable; skipping runtime-file/version drift check."
-  exit 0
-fi
-
-comparison_base="$first_parent"
-if [[ "$parent_refs" == *" "* ]]; then
-  second_parent="${parent_refs#* }"
-  second_parent="${second_parent%% *}"
-
-  if ! git cat-file -e "${second_parent}^{commit}" >/dev/null 2>&1; then
-    printf '%s\n' "Merge parent history unavailable; skipping runtime-file/version drift check."
+  shallow_file="$(git rev-parse --git-path shallow 2>/dev/null || true)"
+  head_commit="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ -f "$shallow_file" ] && grep -Fqx "$head_commit" "$shallow_file"; then
+    printf '%s\n' "Parent commit history unavailable; cannot verify runtime-file/version drift. Fetch complete history (for example, use checkout fetch-depth: 0)." >&2
+    exit 1
+  fi
+  if [ -z "$version_guard_base_ref" ]; then
+    printf '%s\n' "No parent commit found; skipping runtime-file/version drift check."
     exit 0
   fi
-
-  if ! comparison_base="$(git merge-base "$first_parent" "$second_parent" 2>/dev/null)" || [ -z "$comparison_base" ]; then
-    printf '%s\n' "Merge base unavailable; skipping runtime-file/version drift check."
-    exit 0
+else
+  if ! git cat-file -e "${first_parent}^{commit}" >/dev/null 2>&1; then
+    printf '%s\n' "Parent commit history unavailable; cannot verify runtime-file/version drift. Fetch complete history (for example, use checkout fetch-depth: 0)." >&2
+    exit 1
   fi
+fi
+
+if [ -n "$version_guard_base_ref" ]; then
+  if ! git cat-file -e "${version_guard_base_ref}^{commit}" >/dev/null 2>&1; then
+    printf '%s\n' "Requested VERSION_GUARD_BASE_REF '${version_guard_base_ref}' is unavailable; cannot verify runtime-file/version drift. Fetch complete history (for example, use checkout fetch-depth: 0)." >&2
+    exit 1
+  fi
+  comparison_base="$version_guard_base_ref"
+else
+  # Without an explicit PR base, compare merge commits against their first parent.
+  comparison_base="$first_parent"
 fi
 
 changed_runtime="$(git diff --name-only "$comparison_base" HEAD -- \
