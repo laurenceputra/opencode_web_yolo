@@ -96,6 +96,7 @@ run_entrypoint() {
     XDG_DATA_HOME="$data_home" \
     XDG_STATE_HOME="${data_home}/opencode/state" \
     OPENCODE_WEB_RETENTION_DAYS=0 \
+    OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS="${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS-300}" \
     "$ENTRYPOINT_COPY" "$@"
 }
 
@@ -108,6 +109,15 @@ existing_output="$(run_entrypoint "$existing_home" "$existing_data" true 2>&1)"
 assert_contains "$existing_output" "VACUUM: compacting OpenCode database at ${existing_db}"
 assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=timeout --kill-after=5 300 sqlite3 -cmd .timeout 5000 ${existing_db} VACUUM;"
 assert_contains "$(cat "$SQLITE_LOG")" "-cmd .timeout 5000 ${existing_db} VACUUM;"
+
+custom_home="${TMP_DIR}/custom-timeout-home"
+custom_data="${TMP_DIR}/custom-timeout-data"
+custom_db="${custom_data}/opencode/opencode.db"
+mkdir -p "$(dirname "$custom_db")"
+: >"$custom_db"
+custom_output="$(OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=42 run_entrypoint "$custom_home" "$custom_data" true 2>&1)"
+assert_contains "$custom_output" "VACUUM: compacting OpenCode database at ${custom_db}"
+assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=timeout --kill-after=5 42 sqlite3 -cmd .timeout 5000 ${custom_db} VACUUM;"
 
 missing_home="${TMP_DIR}/missing-home"
 missing_data="${TMP_DIR}/missing-data"
@@ -152,5 +162,26 @@ assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=timeout --kill-
 if [ ! -e "${TMP_DIR}/app-ran-after-timeout" ]; then
   fail "application did not continue after startup VACUUM timeout"
 fi
+
+custom_timeout_home="${TMP_DIR}/custom-timeout-warning-home"
+custom_timeout_data="${TMP_DIR}/custom-timeout-warning-data"
+custom_timeout_db="${custom_timeout_data}/opencode/opencode.db"
+mkdir -p "$(dirname "$custom_timeout_db")"
+: >"$custom_timeout_db"
+set +e
+custom_timeout_output="$(OPENCODE_WEB_TEST_TIMEOUT_EXIT=124 OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=42 run_entrypoint "$custom_timeout_home" "$custom_timeout_data" true 2>&1)"
+custom_timeout_status=$?
+set -e
+assert_equals "0" "$custom_timeout_status"
+assert_contains "$custom_timeout_output" "WARNING: startup VACUUM timed out after the 42-second TERM deadline (KILL escalation after 5 additional seconds); continuing startup."
+
+for invalid_timeout in '' 0 01 2147483648 invalid; do
+  set +e
+  invalid_output="$(OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS="$invalid_timeout" run_entrypoint "${TMP_DIR}/invalid-home-${invalid_timeout}" "${TMP_DIR}/invalid-data-${invalid_timeout}" true 2>&1)"
+  invalid_status=$?
+  set -e
+  assert_equals 1 "$invalid_status"
+  assert_contains "$invalid_output" "OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS"
+done
 
 printf '%s\n' "PASS: startup VACUUM behavior"

@@ -45,7 +45,7 @@ Enforce these contracts on every runtime change:
 4. Emit identical run args for normal run and dry-run previews.
 5. Keep diagnostics independent of container startup.
 6. In entrypoint, map UID/GID, ensure writable runtime dirs, avoid recursive chown on read-only mounts, then exec via `gosu`.
-7. After ownership and HOME/XDG exports, inspect `${XDG_DATA_HOME}/opencode/opencode.db`. If present, run startup `VACUUM;` via `sqlite3` and `gosu` as the mapped user with a 5000 ms busy timeout; GNU `timeout` sends TERM after 300 seconds and KILL 5 seconds later if needed. Skip missing databases without creating them and warn/continue on failures or timeout expiry. This is separate from retention's no-raw-SQL worker guarantee.
+7. After ownership and HOME/XDG exports, inspect `${XDG_DATA_HOME}/opencode/opencode.db`. If present, run startup `VACUUM;` via `sqlite3` and `gosu` as the mapped user with a 5000 ms busy timeout; the persistent `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` setting defaults to 300, is a positive integer bounded to `2147483647`, and controls GNU `timeout`'s TERM deadline. KILL escalation remains fixed at 5 seconds. Skip missing databases without creating them; ordinary failures warn concisely, while timeout-expiry warnings include the effective TERM deadline. All failures warn/continue without blocking launch. This is separate from retention's no-raw-SQL worker guarantee.
 
 # Retention lifecycle
 
