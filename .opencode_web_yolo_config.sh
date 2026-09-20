@@ -13,8 +13,6 @@ _opencode_web_build_no_cache_env_set="${OPENCODE_WEB_BUILD_NO_CACHE+x}"
 _opencode_web_build_no_cache_env="${OPENCODE_WEB_BUILD_NO_CACHE-}"
 _opencode_web_build_pull_env_set="${OPENCODE_WEB_BUILD_PULL+x}"
 _opencode_web_build_pull_env="${OPENCODE_WEB_BUILD_PULL-}"
-_opencode_web_auto_pull_env_set="${OPENCODE_WEB_AUTO_PULL+x}"
-_opencode_web_auto_pull_env="${OPENCODE_WEB_AUTO_PULL-}"
 _opencode_web_dry_run_env_set="${OPENCODE_WEB_DRY_RUN+x}"
 _opencode_web_dry_run_env="${OPENCODE_WEB_DRY_RUN-}"
 _opencode_web_verbose_env_set="${OPENCODE_WEB_VERBOSE+x}"
@@ -82,11 +80,6 @@ if [ "${_opencode_web_build_pull_env_set}" = x ]; then
   OPENCODE_WEB_BUILD_PULL="${_opencode_web_build_pull_env}"
 else
   OPENCODE_WEB_BUILD_PULL=0
-fi
-if [ "${_opencode_web_auto_pull_env_set}" = x ]; then
-  OPENCODE_WEB_AUTO_PULL="${_opencode_web_auto_pull_env}"
-else
-  OPENCODE_WEB_AUTO_PULL=1
 fi
 if [ "${_opencode_web_dry_run_env_set}" = x ]; then
   OPENCODE_WEB_DRY_RUN="${_opencode_web_dry_run_env}"

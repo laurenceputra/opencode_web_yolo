@@ -115,6 +115,7 @@ Operator-facing settings:
 | `OPENCODE_WEB_CONTAINER_NAME` | `opencode_web_yolo` | Docker container name used for launch, replacement, and diagnostics. |
 | `OPENCODE_WEB_RESTART_POLICY` | `unless-stopped` | Docker restart policy applied to the container. |
 | `OPENCODE_WEB_RUN_DETACHED` | `1` | Launch mode default. Use `1` for background mode or `0` for attached runs unless overridden by flags. |
+| `OPENCODE_WEB_AUTO_PULL` | `1` | Persistent pull-on-start setting. Set to `0` in `~/.opencode_web_yolo/config` to disable ordinary automatic pulls; compatibility rebuilds still force Docker `--pull`. |
 | `OPENCODE_WEB_YOLO_REPO` | `laurenceputra/opencode_web_yolo` | GitHub repo used for wrapper self-update checks and bootstrap downloads. |
 | `OPENCODE_WEB_YOLO_BRANCH` | `main` | Branch used with `OPENCODE_WEB_YOLO_REPO` for update checks and bootstrap downloads. |
 | `OPENCODE_WEB_SKIP_UPDATE_CHECK` | `0` | Set to `1` to skip the wrapper's remote `VERSION` check and self-update flow. |
@@ -134,8 +135,11 @@ Operator-facing settings:
 `OPENCODE_WEB_VERBOSE=1` plus `OPENCODE_WEB_RETENTION_DRY_RUN=1` remain supported as environment compatibility/troubleshooting
 controls, but are not generated as persistent defaults. `--pull`, `--no-pull`, `--dry-run`,
 and `--verbose` are likewise one-shot. A compatibility rebuild for a legacy or missing Node
-metadata image always adds Docker `--pull`, including when `--no-pull` or stale auto-pull
-settings were supplied.
+metadata image always adds Docker `--pull`, including when `--no-pull` is used or persistent
+auto-pull is disabled.
+
+`OPENCODE_WEB_AUTO_PULL` is persistent when set in the generated config file. Use `--pull` or
+`--no-pull` when the pull behavior should apply only to one invocation.
 
 ### Playwright runtime
 

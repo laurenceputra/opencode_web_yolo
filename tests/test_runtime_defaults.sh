@@ -26,6 +26,7 @@ assert_equals 600 "$(stat -c '%a' "${CONFIG_FILE}")"
 if grep -Eq '^export ' "${CONFIG_FILE}"; then
   fail "generated config must contain only commented overrides"
 fi
+assert_contains "$(cat "${CONFIG_FILE}")" "# export OPENCODE_WEB_AUTO_PULL=0"
 assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_BASE_IMAGE"
 assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION"
 
@@ -55,12 +56,13 @@ export OPENCODE_WEB_YOLO_WORKDIR=/legacy-workdir
 export OPENCODE_WEB_YOLO_CLEANUP=0
 export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=9.9.9
 export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
+export OPENCODE_WEB_AUTO_PULL=0
 EOF
 chmod 600 "${CONFIG_FILE}"
 
 export FAKE_IMAGE_NODE_VERSION=v20.11.1
 export FAKE_IMAGE_NODE_MAJOR=20
-export OPENCODE_WEB_AUTO_PULL=0
+unset OPENCODE_WEB_AUTO_PULL
 : >"${BUILD_LOG}"
 legacy_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$legacy_output" "hostname=0.0.0.0"
@@ -118,6 +120,12 @@ matching_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)
 assert_not_contains "$matching_output" "Node runtime metadata mismatch"
 if [ -s "${BUILD_LOG}" ]; then
   fail "matching Node 22 metadata must allow image reuse"
+fi
+: >"${BUILD_LOG}"
+persistent_matching_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+assert_contains "$persistent_matching_output" "auto_pull=0"
+if [ -s "${BUILD_LOG}" ]; then
+  fail "persistent OPENCODE_WEB_AUTO_PULL=0 must allow matching image reuse"
 fi
 
 cat >"${CONFIG_FILE}" <<'EOF'

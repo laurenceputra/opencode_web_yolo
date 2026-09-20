@@ -154,6 +154,7 @@ reset_install_home
 prepare_remote_release "${REMOTE_VERSION}" "updated"
 mkdir -p "${HOME_DIR}/.opencode_web_yolo"
 printf '%s\n' 'export OPENCODE_WEB_BASE_IMAGE=node:20-slim' >"${HOME_DIR}/.opencode_web_yolo/config"
+printf '%s\n' 'export OPENCODE_WEB_AUTO_PULL=0' >>"${HOME_DIR}/.opencode_web_yolo/config"
 chmod 600 "${HOME_DIR}/.opencode_web_yolo/config"
 chmod -x "${REMOTE_DIR}/.opencode_web_yolo.sh"
 chmod -x "${REMOTE_DIR}/.opencode_web_yolo_entrypoint.sh"
@@ -164,6 +165,7 @@ assert_contains "$output_update" "Updating wrapper from ${LOCAL_VERSION} to ${RE
 assert_contains "$output_update" "Update complete, re-executing wrapper."
 assert_contains "$output_update" "DRY RUN"
 assert_contains "$output_update" "run_detached=0"
+assert_contains "$output_update" "auto_pull=0"
 assert_contains "$output_update" "--model local"
 assert_equals "${REMOTE_VERSION}" "$(tr -d '[:space:]' <"${INSTALL_HOME}/VERSION")"
 if ! grep -F -- "remote-updated" "${INSTALL_HOME}/README.md" >/dev/null 2>&1; then

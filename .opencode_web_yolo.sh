@@ -570,6 +570,7 @@ write_default_config() {
 # export OPENCODE_WEB_CONTAINER_NAME=opencode_web_yolo
 # export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 # export OPENCODE_WEB_RUN_DETACHED=1
+# export OPENCODE_WEB_AUTO_PULL=0
 # export OPENCODE_WEB_YOLO_IMAGE=opencode_web_yolo:latest
 # export OPENCODE_WEB_CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/opencode
 # export OPENCODE_WEB_DATA_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/opencode

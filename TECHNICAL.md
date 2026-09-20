@@ -184,6 +184,9 @@ Controls:
 - `PLAYWRIGHT_VERSION` is a wrapper-owned Docker build arg (default fallback `1.62.1`); enabled builds resolve the current `@playwright/test` npm version, while skipped checks use that release fallback. User config cannot pin the package version.
 - `--wrangler` or `OPENCODE_WEB_BUILD_WRANGLER=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
+- `OPENCODE_WEB_AUTO_PULL=1` enables pull-on-start by default and may be set to `0` in the
+  persistent wrapper config; missing images, wrapper metadata drift, and invalid/missing/non-22
+  Node metadata still force Docker `--pull`.
 - `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips npm lookup and OpenCode/Playwright package-version drift comparisons, but does not disable enabled builds. Pull/no-cache, dry-run, verbose, retention dry-run, and skip-version-check settings are one-shot/troubleshooting controls and are not generated as active config defaults. Truthy build toggles (`true`, `yes`, `on`) are normalized to `0`/`1` before Docker args and metadata comparisons.
 
 ## Release Checklist
