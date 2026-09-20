@@ -30,7 +30,7 @@ assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_BASE_IMAGE"
 assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION"
 
 set +e
-overwrite_output="$(${ROOT_DIR}/.opencode_web_yolo.sh config 2>&1)"
+overwrite_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" config 2>&1)"
 overwrite_status=$?
 set -e
 assert_equals 1 "$overwrite_status"
@@ -39,7 +39,7 @@ assert_contains "$overwrite_output" "Refusing to overwrite"
 rm -f "${CONFIG_FILE}"
 ln -s "${TMP_DIR}/not-created" "${CONFIG_FILE}"
 set +e
-symlink_output="$(${ROOT_DIR}/.opencode_web_yolo.sh config 2>&1)"
+symlink_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" config 2>&1)"
 symlink_status=$?
 set -e
 assert_equals 1 "$symlink_status"
@@ -62,7 +62,7 @@ export FAKE_IMAGE_NODE_VERSION=v20.11.1
 export FAKE_IMAGE_NODE_MAJOR=20
 export OPENCODE_WEB_AUTO_PULL=0
 : >"${BUILD_LOG}"
-legacy_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+legacy_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$legacy_output" "hostname=0.0.0.0"
 assert_contains "$legacy_output" "command=opencode serve --hostname 0.0.0.0"
 assert_contains "$legacy_output" "runtime_env_home=/home/opencode"
@@ -86,7 +86,7 @@ for metadata_case in missing non22 major-mismatch; do
       export FAKE_IMAGE_NODE_VERSION=v22.14.0 FAKE_IMAGE_NODE_MAJOR=20
       ;;
   esac
-  output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+  output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
   assert_contains "$output" "Node runtime metadata mismatch"
   assert_contains "$(cat "${BUILD_LOG}")" "--pull"
 done
@@ -94,7 +94,7 @@ done
 for malformed_version in v22 v22.14 v22.x.0 22.14.0 v22.01.0 v22.14.0-extra; do
   : >"${BUILD_LOG}"
   export FAKE_IMAGE_NODE_VERSION="$malformed_version" FAKE_IMAGE_NODE_MAJOR=22
-  output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+  output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
   assert_contains "$output" "Node runtime metadata mismatch"
   assert_contains "$(cat "${BUILD_LOG}")" "--pull"
 done
@@ -102,19 +102,19 @@ done
 unset FAKE_IMAGE_NODE_VERSION FAKE_IMAGE_NODE_MAJOR
 export FAKE_IMAGE_MISSING=1
 : >"${BUILD_LOG}"
-missing_image_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+missing_image_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$missing_image_output" "image 'opencode_web_yolo:latest' is missing"
 assert_contains "$(cat "${BUILD_LOG}")" "--pull"
 unset FAKE_IMAGE_MISSING
 
 export FAKE_IMAGE_WRAPPER_VERSION=0.3.0
 : >"${BUILD_LOG}"
-version_drift_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+version_drift_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$version_drift_output" "wrapper version metadata mismatch"
 assert_contains "$(cat "${BUILD_LOG}")" "--pull"
 unset FAKE_IMAGE_WRAPPER_VERSION
 : >"${BUILD_LOG}"
-matching_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+matching_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_not_contains "$matching_output" "Node runtime metadata mismatch"
 if [ -s "${BUILD_LOG}" ]; then
   fail "matching Node 22 metadata must allow image reuse"
@@ -156,7 +156,7 @@ EOF
 export OPENCODE_WEB_EXPECTED_OPENCODE_VERSION=1.2.7
 export OPENCODE_WEB_SKIP_VERSION_CHECK=0
 : >"${BUILD_LOG}"
-opencode_drift_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+opencode_drift_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$opencode_drift_output" "OpenCode version mismatch"
 assert_not_contains "$(cat "${BUILD_LOG}")" "--pull"
 
@@ -167,7 +167,7 @@ EOF
 unset OPENCODE_WEB_EXPECTED_OPENCODE_VERSION
 export OPENCODE_WEB_SKIP_VERSION_CHECK=1
 : >"${BUILD_LOG}"
-feature_drift_output="$(${ROOT_DIR}/.opencode_web_yolo.sh --no-pull --dry-run 2>&1)"
+feature_drift_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$feature_drift_output" "Playwright build mismatch"
 assert_contains "$feature_drift_output" "Wrangler build mismatch"
 assert_not_contains "$(cat "${BUILD_LOG}")" "--pull"
