@@ -34,6 +34,7 @@ assert_contains "$output" "container_name=opencode_web_yolo"
 assert_contains "$output" "restart_policy=unless-stopped"
 assert_contains "$output" "run_detached=1"
 assert_contains "$output" "auto_pull=1"
+assert_contains "$output" "startup_vacuum_term_timeout_seconds=300"
 assert_contains "$output" "build_pull=1"
 assert_contains "$output" "build_playwright=0"
 assert_contains "$output" "opencode_config_dir=${HOME}/.config/opencode"
@@ -50,6 +51,7 @@ assert_contains "$output" "-e HOME=/home/opencode"
 assert_contains "$output" "-e XDG_CONFIG_HOME=/home/opencode/.config"
 assert_contains "$output" "-e XDG_DATA_HOME=/home/opencode/.local/share"
 assert_contains "$output" "-e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state"
+assert_contains "$output" "-e OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=300"
 assert_contains "$output" ".config/opencode"
 assert_contains "$output" ".local/share/opencode"
 assert_contains "$output" "--model local"
@@ -67,6 +69,22 @@ for truthy_value in true yes on; do
   assert_contains "$output_truthy" "build_playwright=1"
 done
 unset OPENCODE_WEB_BUILD_PLAYWRIGHT
+
+for invalid_timeout in '' 0 01 2147483648 invalid; do
+  set +e
+  invalid_output="$(OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS="$invalid_timeout" "${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+  invalid_status=$?
+  set -e
+  assert_equals 1 "$invalid_status"
+  assert_contains "$invalid_output" "OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS"
+done
+
+custom_output="$(OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=42 "${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+assert_contains "$custom_output" "startup_vacuum_term_timeout_seconds=42"
+assert_contains "$custom_output" "-e OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=42"
+
+max_timeout_output="$(OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=2147483647 "${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
+assert_contains "$max_timeout_output" "startup_vacuum_term_timeout_seconds=2147483647"
 
 mkdir -p "${HOME}/.opencode_web_yolo"
 printf '%s\n' 'export OPENCODE_WEB_BUILD_PLAYWRIGHT=true' >"${HOME}/.opencode_web_yolo/config"

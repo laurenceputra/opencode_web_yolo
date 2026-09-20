@@ -27,6 +27,7 @@ if grep -Eq '^export ' "${CONFIG_FILE}"; then
   fail "generated config must contain only commented overrides"
 fi
 assert_contains "$(cat "${CONFIG_FILE}")" "# export OPENCODE_WEB_AUTO_PULL=0"
+assert_contains "$(cat "${CONFIG_FILE}")" "# export OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=300"
 assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_BASE_IMAGE"
 assert_not_contains "$(cat "${CONFIG_FILE}")" "OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION"
 
@@ -57,6 +58,7 @@ export OPENCODE_WEB_YOLO_CLEANUP=0
 export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=9.9.9
 export OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 export OPENCODE_WEB_AUTO_PULL=0
+export OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=42
 EOF
 chmod 600 "${CONFIG_FILE}"
 
@@ -68,6 +70,7 @@ legacy_output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --no-pull --dry-run 2>&1)"
 assert_contains "$legacy_output" "hostname=0.0.0.0"
 assert_contains "$legacy_output" "command=opencode serve --hostname 0.0.0.0"
 assert_contains "$legacy_output" "runtime_env_home=/home/opencode"
+assert_contains "$legacy_output" "startup_vacuum_term_timeout_seconds=42"
 assert_contains "$legacy_output" "-w /workspace"
 assert_contains "$legacy_output" "Node runtime metadata mismatch"
 assert_contains "$(cat "${BUILD_LOG}")" "--pull"

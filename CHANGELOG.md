@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.0] - 2026-09-20
+
+- Added persistent `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` configuration, defaulting to 300 seconds, with bounded positive-integer validation in the wrapper and entrypoint, Docker propagation, and health/dry-run visibility. SQLite's 5000 ms busy timeout and fixed 5-second KILL escalation remain unchanged.
+
 ## [0.4.0] - 2026-09-20
 
 - Made the runtime release the owner of the fixed `node:22-slim` base image and `opencode-ai` package, with Node 22 build assertions and image metadata validation.

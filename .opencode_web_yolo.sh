@@ -571,6 +571,7 @@ write_default_config() {
 # export OPENCODE_WEB_RESTART_POLICY=unless-stopped
 # export OPENCODE_WEB_RUN_DETACHED=1
 # export OPENCODE_WEB_AUTO_PULL=0
+# export OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=300
 # export OPENCODE_WEB_YOLO_IMAGE=opencode_web_yolo:latest
 # export OPENCODE_WEB_CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/opencode
 # export OPENCODE_WEB_DATA_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/opencode
@@ -616,6 +617,7 @@ show_health() {
   printf '%s\n' "  restart_policy=${OPENCODE_WEB_RESTART_POLICY}"
   printf '%s\n' "  run_detached=${OPENCODE_WEB_RUN_DETACHED}"
   printf '%s\n' "  auto_pull=${OPENCODE_WEB_AUTO_PULL}"
+  printf '%s\n' "  startup_vacuum_term_timeout_seconds=${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}"
   printf '%s\n' "  build_pull=${OPENCODE_WEB_BUILD_PULL}"
   printf '%s\n' "  build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
   printf '%s\n' "  build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"
@@ -1045,6 +1047,7 @@ main() {
   OPENCODE_WEB_SKIP_UPDATE_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_UPDATE_CHECK}")"
   OPENCODE_WEB_SKIP_VERSION_CHECK="$(normalize_bool "${OPENCODE_WEB_SKIP_VERSION_CHECK}")"
   OPENCODE_WEB_RETENTION_DRY_RUN="$(normalize_bool "${OPENCODE_WEB_RETENTION_DRY_RUN}")"
+  validate_positive_integer OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS "${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}"
   validate_retention_days
   if [ "$OPENCODE_WEB_RETENTION_DAYS" != "0" ]; then
     validate_positive_integer OPENCODE_WEB_RETENTION_POLL_SECONDS "${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
@@ -1114,6 +1117,7 @@ main() {
     -e "OPENCODE_WEB_RETENTION_POLL_SECONDS=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
     -e "OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
     -e "OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
+    -e "OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS=${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}"
     -e "HOME=${runtime_home}"
     -e "XDG_CONFIG_HOME=${runtime_xdg_config}"
     -e "XDG_DATA_HOME=${runtime_xdg_data}"
@@ -1219,6 +1223,7 @@ main() {
     printf '%s\n' "restart_policy=${OPENCODE_WEB_RESTART_POLICY}"
     printf '%s\n' "run_detached=${OPENCODE_WEB_RUN_DETACHED}"
     printf '%s\n' "auto_pull=${OPENCODE_WEB_AUTO_PULL}"
+    printf '%s\n' "startup_vacuum_term_timeout_seconds=${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS}"
     printf '%s\n' "build_pull=${OPENCODE_WEB_BUILD_PULL}"
     printf '%s\n' "build_playwright=${OPENCODE_WEB_BUILD_PLAYWRIGHT}"
     printf '%s\n' "build_wrangler=${OPENCODE_WEB_BUILD_WRANGLER}"

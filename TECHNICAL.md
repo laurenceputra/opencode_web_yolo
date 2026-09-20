@@ -111,7 +111,7 @@ Entrypoint behavior:
 - avoids recursive ownership operations across read-only mount boundaries.
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
-- after ownership and HOME/XDG setup, checks `${XDG_DATA_HOME}/opencode/opencode.db`; when present, runs `VACUUM;` through `sqlite3` via `gosu` as the mapped user with a 5000 ms busy timeout. GNU `timeout` sends TERM after 300 seconds and KILL 5 seconds later if the command remains alive. Missing databases are skipped without creation. Vacuum failures or timeout expiry warn to stderr and do not block either direct or retention-supervised OpenCode launch. This startup maintenance is separate from retention, whose worker never uses raw SQL or mutates SQLite WAL/SHM files.
+- after ownership and HOME/XDG setup, checks `${XDG_DATA_HOME}/opencode/opencode.db`; when present, runs `VACUUM;` through `sqlite3` via `gosu` as the mapped user with a 5000 ms busy timeout. `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` is a persistent positive integer bounded to `2147483647`, defaults to 300, and controls GNU `timeout`'s TERM deadline; KILL escalation remains fixed at 5 seconds. Missing databases are skipped without creation. Ordinary vacuum failures warn concisely, while timeout-expiry warnings include the effective TERM deadline; neither blocks direct or retention-supervised OpenCode launch. This startup maintenance is separate from retention, whose worker never uses raw SQL or mutates SQLite WAL/SHM files.
 - when retention is enabled, starts OpenCode, waits for authenticated `/global/health`, and supervises a mapped-user scheduler; TERM/INT are forwarded and the app exit status is returned.
 - Docker starts `tini -s -g` so orphaned descendants are reaped and TERM/INT are forwarded to the child process group. The supervisor preserves the received signal when forwarding it to the app.
 - does not inject unsupported OpenCode CLI flags for instruction loading.
@@ -211,5 +211,5 @@ Tests and CI assert:
 - retention configuration, marker path, API schedule, and dry-run state.
 - retention API compatibility, active-session skipping, serial deletion, marker retry semantics, and supervisor signal/exit behavior.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`, `sqlite3`), including a successful `opencode serve --help` check.
-- startup VACUUM behavior for existing and missing databases, custom XDG data paths, mapped-user invocation, SQLite timeout plus TERM/KILL escalation, warning-only failures, and continued application execution.
+- startup VACUUM behavior for existing and missing databases, custom XDG data paths, mapped-user invocation, the configurable bounded TERM timeout plus fixed 5-second KILL escalation, warning-only failures, and continued application execution.
 - `VERSION` semver format and runtime-file/version drift guard.

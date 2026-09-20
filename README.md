@@ -39,6 +39,7 @@ Defaults:
 - Launch mode: background (`-d`)
 - Pull behavior: pull-on-start enabled
 - Session retention: disabled by default (`OPENCODE_WEB_RETENTION_DAYS=0`)
+- Startup VACUUM TERM timeout: `300` seconds (KILL escalation remains fixed at 5 seconds)
 
 ## Authentication Requirement
 
@@ -116,6 +117,7 @@ Operator-facing settings:
 | `OPENCODE_WEB_RESTART_POLICY` | `unless-stopped` | Docker restart policy applied to the container. |
 | `OPENCODE_WEB_RUN_DETACHED` | `1` | Launch mode default. Use `1` for background mode or `0` for attached runs unless overridden by flags. |
 | `OPENCODE_WEB_AUTO_PULL` | `1` | Persistent pull-on-start setting. Set to `0` in `~/.opencode_web_yolo/config` to disable ordinary automatic pulls; compatibility rebuilds still force Docker `--pull`. |
+| `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` | `300` | Persistent positive integer timeout for startup SQLite VACUUM's GNU `timeout` TERM deadline; values above `2147483647` are rejected. The SQLite busy timeout remains 5000 ms and KILL escalation remains fixed at 5 seconds. |
 | `OPENCODE_WEB_YOLO_REPO` | `laurenceputra/opencode_web_yolo` | GitHub repo used for wrapper self-update checks and bootstrap downloads. |
 | `OPENCODE_WEB_YOLO_BRANCH` | `main` | Branch used with `OPENCODE_WEB_YOLO_REPO` for update checks and bootstrap downloads. |
 | `OPENCODE_WEB_SKIP_UPDATE_CHECK` | `0` | Set to `1` to skip the wrapper's remote `VERSION` check and self-update flow. |
@@ -164,11 +166,14 @@ The wrapper also pins runtime env (`HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `
 
 On every container startup, after the mapped-user ownership and XDG setup, the entrypoint checks
 `$XDG_DATA_HOME/opencode/opencode.db`. If that database exists, it runs `VACUUM;` with `sqlite3` as
-the mapped runtime user, waiting up to 5000 ms for a lock. GNU `timeout` sends TERM after 300
-seconds and sends KILL 5 seconds later if VACUUM is still running. A missing database is skipped
+the mapped runtime user, waiting up to 5000 ms for a lock. GNU `timeout` sends TERM after the
+configured `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` deadline (300 seconds by default)
+and sends KILL 5 seconds later if VACUUM is still running. A missing database is skipped
 without creating one. Vacuum can add startup latency and temporarily require additional disk space
 while SQLite rewrites the database. If it cannot vacuum because of a lock, permissions, corruption,
-disk space, timeout, or another error, startup prints a warning and continues.
+disk space, or another non-timeout error, startup prints a concise warning and continues. Timeout-
+expiry warnings include the effective TERM deadline. `health` and `--dry-run` show the effective TERM
+timeout, and the wrapper passes it into Docker.
 
 Startup VACUUM is separate from weekly retention. The retention worker remains an authenticated
 OpenCode API worker: it does not use raw SQL or manually modify SQLite WAL, SHM, or journal
