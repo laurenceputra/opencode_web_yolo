@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0] - 2026-09-20
+
+- Made the runtime release the owner of the fixed `node:22-slim` base image and `opencode-ai` package, with Node 22 build assertions and image metadata validation.
+- Added compatibility rebuilds that force Docker `--pull` for legacy, missing, or non-Node-22 image metadata, including after wrapper self-update and `--no-pull` invocations.
+- Changed generated config to a secure, override-only commented template and stopped honoring stale release-owned runtime settings without rewriting existing user config.
+
 ## [0.3.0] - 2026-09-13
 
 - Switched runtime launches from `opencode web` to `opencode serve`.

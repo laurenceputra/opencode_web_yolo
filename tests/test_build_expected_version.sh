@@ -35,6 +35,14 @@ case "\$1" in
       printf '%s\n' "\${FAKE_IMAGE_OPENCODE_VERSION:-1.2.11}"
       exit 0
     fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-node-version" >/dev/null 2>&1; then
+      printf '%s\n' "\${FAKE_IMAGE_NODE_VERSION:-v22.14.0}"
+      exit 0
+    fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-node-major" >/dev/null 2>&1; then
+      printf '%s\n' "\${FAKE_IMAGE_NODE_MAJOR:-22}"
+      exit 0
+    fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright-version" >/dev/null 2>&1; then
       printf '%s\n' "\${FAKE_IMAGE_PLAYWRIGHT_VERSION:-1.62.0}"
       exit 0
@@ -106,9 +114,9 @@ assert_contains "$build_invocation" "--build-arg OPENCODE_WEB_BUILD_WRANGLER=1"
 : >"${DOCKER_LOG}"
 export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=1.62.2
 output_override="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
-assert_contains "$output_override" "Playwright version mismatch (image='1.62.0', expected='1.62.2')"
+assert_contains "$output_override" "Playwright version mismatch (image='1.62.0', expected='1.62.1')"
 build_invocation_override="$(tr -d '\n' <"${DOCKER_LOG}")"
-assert_contains "$build_invocation_override" "--build-arg PLAYWRIGHT_VERSION=1.62.2"
+assert_contains "$build_invocation_override" "--build-arg PLAYWRIGHT_VERSION=1.62.1"
 
 : >"${DOCKER_LOG}"
 : >"${FAKE_NPM_LOG}"
@@ -117,7 +125,7 @@ export OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION=1.62.3
 output_skip="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
 assert_not_contains "$output_skip" "Playwright version mismatch"
 build_invocation_skip="$(tr -d '\n' <"${DOCKER_LOG}")"
-assert_contains "$build_invocation_skip" "--build-arg PLAYWRIGHT_VERSION=1.62.3"
+assert_contains "$build_invocation_skip" "--build-arg PLAYWRIGHT_VERSION=1.62.1"
 if [ -s "${FAKE_NPM_LOG}" ]; then
   fail "version checks must not query npm when OPENCODE_WEB_SKIP_VERSION_CHECK=1"
 fi

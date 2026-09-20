@@ -28,6 +28,8 @@ Enforce these contracts on every runtime change:
 - Run `opencode serve` with host `0.0.0.0` and configured port unless explicitly overridden.
 - Install and expose `gh`, `git`, SSH client binaries, and `sqlite3` inside the image.
 - Persist both OpenCode config and state directories across restarts.
+- Build the release-owned `node:22-slim` runtime, assert Node major 22, and record Node
+  metadata for deterministic legacy-image rebuilds.
 - Show explicit warnings before enabling sensitive mounts (`-gh`, `--mount-ssh`).
 - Keep entrypoint ownership setup compatible with read-only sensitive mounts.
 

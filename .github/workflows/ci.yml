@@ -21,6 +21,7 @@ jobs:
           bash -n tests/test_helpers.sh
           bash -n tests/test_dry_run.sh
           bash -n tests/test_build_expected_version.sh
+          bash -n tests/test_runtime_defaults.sh
           bash -n tests/test_launch_mode_flags.sh
           bash -n tests/test_container_replace.sh
           bash -n tests/wrapper-dryrun.sh
@@ -56,6 +57,7 @@ jobs:
           shellcheck -x tests/test_helpers.sh
           shellcheck -x tests/test_dry_run.sh
           shellcheck -x tests/test_build_expected_version.sh
+          shellcheck -x tests/test_runtime_defaults.sh
           shellcheck -x tests/test_launch_mode_flags.sh
           shellcheck -x tests/test_container_replace.sh
           shellcheck -x tests/wrapper-dryrun.sh
@@ -115,6 +117,11 @@ jobs:
       - name: Validate required binaries
         run: |
           docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v sqlite3 && command -v timeout && command -v tini && opencode serve --help'
+      - name: Validate Node 22 runtime metadata
+        run: |
+          test "$(docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'node --version')" = "$(docker run --rm --entrypoint cat opencode_web_yolo:ci /opt/opencode-web-yolo-node-version)"
+          test "$(docker run --rm --entrypoint cat opencode_web_yolo:ci /opt/opencode-web-yolo-node-major)" = 22
+          docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'node_version="$(node --version)"; node_major="${node_version#v}"; node_major="${node_major%%.*}"; test "${node_major}" = 22'
       - name: Validate real startup VACUUM
         run: |
           set -euo pipefail

@@ -112,6 +112,20 @@ if ! grep -F "[install] Fetching install assets from example/repo@main" "$instal
   fail "expected bootstrap fetch log line"
 fi
 
+mkdir -p "${home_dir}/.opencode_web_yolo"
+printf '%s\n' 'export OPENCODE_WEB_BASE_IMAGE=node:20-slim' >"${home_dir}/.opencode_web_yolo/config"
+chmod 600 "${home_dir}/.opencode_web_yolo/config"
+PATH="${fake_bin}:${PATH}" \
+  HOME="$home_dir" \
+  OPENCODE_WEB_INSTALL_HOME="$install_home" \
+  OPENCODE_WEB_BIN_DIR="$bin_dir" \
+  OPENCODE_WEB_YOLO_REPO="example/repo" \
+  OPENCODE_WEB_YOLO_BRANCH="main" \
+  OPENCODE_WEB_TEST_REMOTE_DIR="$remote_dir" \
+  bash <"${ROOT_DIR}/install.sh" >/dev/null 2>&1
+assert_contains "$(cat "${home_dir}/.opencode_web_yolo/config")" "OPENCODE_WEB_BASE_IMAGE=node:20-slim"
+assert_equals 600 "$(stat -c '%a' "${home_dir}/.opencode_web_yolo/config")"
+
 for archive_mode in traversal symlink hardlink multi-root duplicate-manifest; do
   bad_install_home="${work_dir}/bad-${archive_mode}"
   rm -rf "$bad_install_home"

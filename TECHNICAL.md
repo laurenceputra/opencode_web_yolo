@@ -13,6 +13,10 @@
   - detached launch by default (`OPENCODE_WEB_RUN_DETACHED=1`)
 - Build/update defaults:
   - pull-on-start by default (`OPENCODE_WEB_AUTO_PULL=1`)
+- Runtime release defaults:
+  - fixed Docker base image `node:22-slim`
+  - fixed OpenCode npm package `opencode-ai`
+  - fixed internal serve hostname `0.0.0.0`, runtime home `/home/opencode`, workdir `/workspace`, and cleanup behavior
 - Reverse proxy is expected in front of localhost bind.
 - Optional weekly session retention is disabled by default.
 
@@ -90,6 +94,8 @@ Docker image includes:
 Image metadata files:
 - `/opt/opencode-web-yolo-version`
 - `/opt/opencode-version`
+- `/opt/opencode-web-yolo-node-version`
+- `/opt/opencode-web-yolo-node-major` (must be `22`)
 - `/opt/opencode-web-yolo-playwright`
 - `/opt/opencode-web-yolo-playwright-version` (installed package version, or `disabled`)
 - `/opt/opencode-web-yolo-playwright-expected-version` (Docker build arg version)
@@ -146,6 +152,7 @@ On run, unless disabled:
   - default branch: `main`
 - if remote version is newer, the complete source is downloaded from `https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz`, extracted to install-home staging, validated against `.opencode_web_yolo.manifest`, promoted with atomic individual renames, and the wrapper re-execs with original args/environment.
 - if the local managed install is incomplete, the same archive repair runs even when local and remote `VERSION` values are equal. A re-exec marker prevents an update loop, and an incomplete or malformed archive fails closed before Docker build.
+- `OPENCODE_WEB_UPDATE_REEXECED=1` prevents an update loop. Explicit and inherited safety controls are preserved across the immediate re-exec, and CLI arguments are parsed afterward and remain authoritative. A stale value exported by a historical config may survive that one re-exec because its provenance is unknowable; a fresh invocation ignores the stale config assignment.
 
 Update can be disabled with:
 - `OPENCODE_WEB_SKIP_UPDATE_CHECK=1`
@@ -156,10 +163,16 @@ Image rebuild happens when any trigger is true:
 - image tag missing locally
 - wrapper version metadata mismatch
 - OpenCode version metadata mismatch (unless version check disabled)
+- Node version metadata missing or not major 22 (compatibility rebuild forces Docker `--pull`)
 - Playwright build metadata mismatch
 - Playwright package version metadata mismatch when the Playwright build is enabled (unless version check disabled)
 - Wrangler build metadata mismatch
 - pull/no-cache build flags requested
+
+When `--no-pull` is explicit, the compatibility pull override applies only to a missing image,
+wrapper release metadata drift, or missing/malformed/non-22 Node metadata. OpenCode, Playwright,
+and Wrangler drift still rebuilds without `--pull`; normal `OPENCODE_WEB_AUTO_PULL` behavior
+continues to apply when `--no-pull` is not selected.
 
 OpenCode install target during build:
 - defaults to `latest` (`OPENCODE_VERSION=latest`)
@@ -168,10 +181,10 @@ OpenCode install target during build:
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
 - `--playwright` or `OPENCODE_WEB_BUILD_PLAYWRIGHT=1`
-- `PLAYWRIGHT_VERSION` is an explicit Docker build arg (default `1.62.1`); the wrapper resolves the current `@playwright/test` version before an enabled build unless `OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION` is set. An explicit expected version remains the install target when version checks are skipped.
+- `PLAYWRIGHT_VERSION` is a wrapper-owned Docker build arg (default fallback `1.62.1`); enabled builds resolve the current `@playwright/test` npm version, while skipped checks use that release fallback. User config cannot pin the package version.
 - `--wrangler` or `OPENCODE_WEB_BUILD_WRANGLER=1`
 - `OPENCODE_WEB_BUILD_NO_CACHE=1`
-- `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips npm lookup and OpenCode/Playwright package-version drift comparisons, but does not disable enabled builds or discard an explicit Playwright pin. Truthy build toggles (`true`, `yes`, `on`) are normalized to `0`/`1` before Docker args and metadata comparisons.
+- `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips npm lookup and OpenCode/Playwright package-version drift comparisons, but does not disable enabled builds. Pull/no-cache, dry-run, verbose, retention dry-run, and skip-version-check settings are one-shot/troubleshooting controls and are not generated as active config defaults. Truthy build toggles (`true`, `yes`, `on`) are normalized to `0`/`1` before Docker args and metadata comparisons.
 
 ## Release Checklist
 

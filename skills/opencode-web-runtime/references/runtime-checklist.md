@@ -37,9 +37,11 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - Startup VACUUM is separate from retention: retention remains an API-only, no-raw-SQL worker and must not manually touch SQLite WAL/SHM/journal sidecars.
 - Map every listed session to a root across directories; block a mapped root when status reports a busy/retrying descendant, fail closed on unmapped active IDs or malformed hierarchies, refresh/recheck immediately before each delete, verify direct 404 before marker advancement, and reject unsafe equal-timestamp page boundaries. The API has no atomic delete-if-idle guarantee.
 - Validate positive worker fetch and scheduler poll timeouts; use `tini -s -g` for PID1 subreaping/group signal forwarding and preserve SIGINT semantics.
-- When enabled, install global `@playwright/test` at an explicit version, run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
+- When enabled, resolve the current global `@playwright/test` version unless checks are skipped (then use the release fallback), run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
 - Record installed/expected Playwright versions and rebuild when enabled-image metadata drifts.
-- Normalize accepted truthy build toggles to canonical `0`/`1` before Docker arguments and metadata comparisons; version-check skip suppresses lookup/drift comparison but preserves an explicit Playwright install pin.
+- Build from fixed `node:22-slim`, assert Node major 22 during the image build, and record
+  installed Node version/major metadata under `/opt` for compatibility rebuild decisions.
+- Normalize accepted truthy build toggles to canonical `0`/`1` before Docker arguments and metadata comparisons; version-check skip suppresses lookup/drift comparison while retaining release-selected Playwright build behavior.
 
 ## Exit Criteria
 

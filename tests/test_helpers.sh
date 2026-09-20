@@ -72,16 +72,29 @@ case "\$1" in
   image)
     shift
     if [ "\${1:-}" = "inspect" ]; then
+      if [ "\${FAKE_IMAGE_MISSING:-0}" = 1 ]; then
+        exit 1
+      fi
       exit 0
     fi
     ;;
   run)
     if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-version" >/dev/null 2>&1; then
-      printf '%s\n' "${wrapper_version}"
+      printf '%s\n' "\${FAKE_IMAGE_WRAPPER_VERSION:-${wrapper_version}}"
       exit 0
     fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-version" >/dev/null 2>&1; then
       printf '%s\n' "1.2.6"
+      exit 0
+    fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-node-version" >/dev/null 2>&1; then
+      if [ "\${FAKE_IMAGE_NODE_VERSION-}" = __missing__ ]; then exit 0; fi
+      printf '%s\n' "\${FAKE_IMAGE_NODE_VERSION:-v22.14.0}"
+      exit 0
+    fi
+    if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-node-major" >/dev/null 2>&1; then
+      if [ "\${FAKE_IMAGE_NODE_MAJOR-}" = __missing__ ]; then exit 0; fi
+      printf '%s\n' "\${FAKE_IMAGE_NODE_MAJOR:-22}"
       exit 0
     fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-playwright-version" >/dev/null 2>&1; then
@@ -103,6 +116,9 @@ case "\$1" in
     exit 0
     ;;
   build)
+    if [ -n "\${FAKE_DOCKER_BUILD_LOG:-}" ]; then
+      printf '%s\n' "\$*" >>"\${FAKE_DOCKER_BUILD_LOG}"
+    fi
     exit 0
     ;;
 esac

@@ -14,6 +14,11 @@ Use this matrix when authoring tests under `tests/`.
   - explicit `HOME`, `XDG_CONFIG_HOME`, and `XDG_DATA_HOME` env contract when user mapping is enabled
 - Password enforcement fails when `OPENCODE_SERVER_PASSWORD` is missing/empty.
 - Image contains `gh`, `git`, `ssh`, `sqlite3`, and `timeout` binaries; `opencode serve --help` succeeds.
+- Docker build asserts Node major 22 and records version metadata; missing, legacy, mismatched,
+  malformed, and non-22 metadata force a `--pull` rebuild even with `--no-pull`, while matching metadata reuses the image.
+- A missing image and wrapper release drift force `--pull`; OpenCode, Playwright, and Wrangler
+  drift do not override an explicit `--no-pull`.
+- Generated config is a mode-0600 override-only commented template and stale release-owned settings are ignored.
 - `-gh` validates host `gh` install/auth and applies gh mount behavior.
 - `--mount-ssh` warns and mounts only on explicit request.
 - `--wrangler` requires an existing host `.wrangler` directory, warns about read-write Cloudflare credential exposure, mounts the exact `:rw` path only when requested, and remains absent by default.
