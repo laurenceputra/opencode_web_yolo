@@ -42,6 +42,7 @@ Trigger rebuild when any of these are true:
 - local image missing
 - wrapper version metadata mismatch
 - installed OpenCode version mismatch
+- missing/malformed/non-22 Node metadata; compatibility/version-driven rebuilds force Docker `--pull`
 - `--pull` or no-cache flags requested
 
 Record version metadata in the image so checks are deterministic.

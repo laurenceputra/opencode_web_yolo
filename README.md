@@ -32,6 +32,7 @@ Defaults:
 - Bind/publish: `127.0.0.1:4096:4096`
 - OpenCode serve host inside container: `0.0.0.0`
 - OpenCode package install target: `latest` at build time
+- Runtime base image: `node:22-slim` (release-owned and enforced during build)
 - Playwright build: disabled by default; opt in with `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config or `--playwright` for one run
 - Container name: `opencode_web_yolo`
 - Restart policy: `unless-stopped`
@@ -81,7 +82,7 @@ If a container with the configured name already exists, wrapper launch replaces 
 
 ### Self-update and repair
 
-Managed installs check the configured GitHub branch on startup. An update downloads one branch archive snapshot, validates the complete release (including the runtime supervisor and retention worker), and only then promotes it before re-executing with the original arguments and environment. The tracked `.opencode_web_yolo.manifest` controls the release file set. Incomplete installs are repaired even when their local `VERSION` equals the remote version; malformed or incomplete archives are rejected before Docker build. Set `OPENCODE_WEB_SKIP_UPDATE_CHECK=1` to skip network checks, but an incomplete managed install still fails closed and must be repaired with `install.sh`.
+Managed installs check the configured GitHub branch on startup. An update downloads one branch archive snapshot, validates the complete release (including the runtime supervisor and retention worker), and only then promotes it before re-executing with the original arguments and environment. The re-exec marker prevents an update loop; explicit and inherited safety controls remain enabled, and original CLI flags remain authoritative. A value exported by a historical wrapper's config can survive that immediate re-exec, but the new loader ignores stale config assignments on the next fresh invocation. The tracked `.opencode_web_yolo.manifest` controls the release file set. Incomplete installs are repaired even when their local `VERSION` equals the remote version; malformed or incomplete archives are rejected before Docker build. Set `OPENCODE_WEB_SKIP_UPDATE_CHECK=1` to skip network checks, but an incomplete managed install still fails closed and must be repaired with `install.sh`.
 
 Bootstrap installation from `curl | bash` uses the same archive-and-validation flow. `curl` and `tar` are required for streamed/bootstrap installs and self-update repairs. Branch names containing `/` are supported; other URL-significant branch characters are encoded safely.
 
@@ -90,8 +91,11 @@ Recovery note for historical `0.1.10` installs: that old updater relies on GNU `
 ## Configuration
 
 Run `opencode_web_yolo config` to generate a sample config file at `~/.opencode_web_yolo/config`.
-The wrapper sources that file on startup, so it is the right place for persistent operator defaults.
-For one-off runs you can still prefix the command with environment variables in your shell, but if the same variable is also exported in the config file, the config-file value wins because it is loaded during wrapper startup.
+The wrapper sources that file on startup, so it is the right place for persistent operator overrides.
+The generated file is an override-only, mode-0600 commented template. Release-owned runtime
+settings (the Node base image, OpenCode package, internal hostname/home/workdir/cleanup, and
+Playwright package-version pin) are not configurable; stale assignments in older config files
+are ignored. One-shot build/debug controls should be supplied as flags or environment variables.
 
 Common workflow:
 
@@ -108,28 +112,34 @@ Operator-facing settings:
 | `OPENCODE_SERVER_PASSWORD` | none, required | Required non-empty password for OpenCode Web. Startup fails if it is missing or empty. |
 | `OPENCODE_SERVER_USERNAME` | `opencode` | Login username paired with `OPENCODE_SERVER_PASSWORD`. |
 | `OPENCODE_WEB_PORT` | `4096` | Host/container port used for `opencode serve` and the local Docker publish mapping. |
-| `OPENCODE_WEB_HOSTNAME` | `0.0.0.0` | Hostname passed to `opencode serve` inside the container. |
 | `OPENCODE_WEB_CONTAINER_NAME` | `opencode_web_yolo` | Docker container name used for launch, replacement, and diagnostics. |
 | `OPENCODE_WEB_RESTART_POLICY` | `unless-stopped` | Docker restart policy applied to the container. |
 | `OPENCODE_WEB_RUN_DETACHED` | `1` | Launch mode default. Use `1` for background mode or `0` for attached runs unless overridden by flags. |
-| `OPENCODE_WEB_AUTO_PULL` | `1` | Pull/rebuild behavior default. Use `0` to disable pull-on-start unless `--pull` is passed. |
+| `OPENCODE_WEB_AUTO_PULL` | `1` | Persistent pull-on-start setting. Set to `0` in `~/.opencode_web_yolo/config` to disable ordinary automatic pulls; compatibility rebuilds still force Docker `--pull`. |
 | `OPENCODE_WEB_YOLO_REPO` | `laurenceputra/opencode_web_yolo` | GitHub repo used for wrapper self-update checks and bootstrap downloads. |
 | `OPENCODE_WEB_YOLO_BRANCH` | `main` | Branch used with `OPENCODE_WEB_YOLO_REPO` for update checks and bootstrap downloads. |
 | `OPENCODE_WEB_SKIP_UPDATE_CHECK` | `0` | Set to `1` to skip the wrapper's remote `VERSION` check and self-update flow. |
-| `OPENCODE_WEB_SKIP_VERSION_CHECK` | `0` | Set to `1` to skip remote npm lookups and OpenCode/enabled-Playwright package version drift checks when deciding whether to rebuild; explicit Playwright pins still apply. |
 | `OPENCODE_WEB_CONFIG_DIR` | `${XDG_CONFIG_HOME:-$HOME/.config}/opencode` | Host OpenCode config directory mounted into the container for persistent config and rules. |
 | `OPENCODE_WEB_DATA_DIR` | `${XDG_DATA_HOME:-$HOME/.local/share}/opencode` | Host OpenCode data directory mounted into the container for persistent sessions, provider auth, and state. |
 | `OPENCODE_WEB_YOLO_IMAGE` | `opencode_web_yolo:latest` | Docker image tag the wrapper builds and runs. |
-| `OPENCODE_WEB_BASE_IMAGE` | `node:22-slim` | Base image used when rebuilding the runtime image. |
-| `OPENCODE_WEB_NPM_PACKAGE` | `opencode-ai` | npm package installed in the runtime image for the OpenCode CLI. |
 | `OPENCODE_WEB_BUILD_PLAYWRIGHT` | `0` | Set to `1` in `~/.opencode_web_yolo/config` for durable Playwright enablement; `--playwright` enables it for one run and preinstalls Chromium into `/ms-playwright`. |
-| `OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION` | none | Optional exact `@playwright/test` install pin. It remains the Docker build target when `OPENCODE_WEB_SKIP_VERSION_CHECK=1`; that skip suppresses npm lookup and installed-version drift comparison, but does not discard the explicit pin. When no pin is set, an enabled build resolves npm unless checks are skipped, then uses the deterministic `1.62.1` fallback. |
 | `OPENCODE_WEB_BUILD_WRANGLER` | `0` | Set to `1` to install `wrangler@latest` globally in the runtime image. `--wrangler` enables this and mounts host Wrangler config for the run. |
 | `OPENCODE_WEB_RETENTION_DAYS` | `0` | Non-negative number of days. After health succeeds, delete inactive root sessions older than this cutoff at most once per seven days. A flag overrides the configured value for that invocation. |
 | `OPENCODE_WEB_RETENTION_DRY_RUN` | `0` | Safely preview retention candidates without deleting or advancing the success marker. |
 | `OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS` | `10000` | Positive per-request worker timeout in milliseconds. Requests that stall fail closed. |
 | `OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS` | `10000` | Positive bounded deletion-verification timeout in milliseconds. |
 | `OPENCODE_WEB_RETENTION_POLL_SECONDS` | `3600` | Positive scheduler interval; values below one second are rejected. |
+
+`OPENCODE_WEB_SKIP_VERSION_CHECK=1`, `OPENCODE_WEB_BUILD_PULL=1`,
+`OPENCODE_WEB_BUILD_NO_CACHE=1`, `OPENCODE_WEB_DRY_RUN=1`, and
+`OPENCODE_WEB_VERBOSE=1` plus `OPENCODE_WEB_RETENTION_DRY_RUN=1` remain supported as environment compatibility/troubleshooting
+controls, but are not generated as persistent defaults. `--pull`, `--no-pull`, `--dry-run`,
+and `--verbose` are likewise one-shot. A compatibility rebuild for a legacy or missing Node
+metadata image always adds Docker `--pull`, including when `--no-pull` is used or persistent
+auto-pull is disabled.
+
+`OPENCODE_WEB_AUTO_PULL` is persistent when set in the generated config file. Use `--pull` or
+`--no-pull` when the pull behavior should apply only to one invocation.
 
 ### Playwright runtime
 
@@ -139,9 +149,9 @@ Playwright is intentionally opt-in because its Chromium browser and Linux depend
 export OPENCODE_WEB_BUILD_PLAYWRIGHT=1
 ```
 
-Use `--playwright` instead when the build should be enabled only for that invocation. The enabled image installs the global `@playwright/test` package at an explicit version, runs that package's `playwright install --with-deps chromium`, and stores the expected and installed versions in image metadata. The global CLI is a convenience for runtime diagnostics and commands; arbitrary mounted projects should still declare `@playwright/test` locally for normal Node.js imports and project dependency resolution.
+Use `--playwright` instead when the build should be enabled only for that invocation. The enabled image installs the wrapper-owned global `@playwright/test` package, resolving the current npm version when checks are enabled and using the release fallback when checks are skipped. It runs that package's `playwright install --with-deps chromium` and stores the expected and installed versions in image metadata; users cannot pin the package through wrapper config. The global CLI is a convenience for runtime diagnostics and commands; arbitrary mounted projects should still declare `@playwright/test` locally for normal Node.js imports and project dependency resolution.
 
-Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized to `1` before image build arguments and metadata comparisons. `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips remote version lookup and package-version drift checks only; Playwright build enablement and explicit install pins still apply.
+Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized to `1` before image build arguments and metadata comparisons. `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips remote version lookup and package-version drift checks only; Playwright build enablement remains effective.
 
 ## Persistence Paths
 
@@ -166,7 +176,7 @@ sidecars.
 
 ## Weekly session retention
 
-Enable cleanup in the generated config, or override it for one invocation:
+Enable retention in the generated config, or override it for one invocation:
 
 ```bash
 export OPENCODE_WEB_RETENTION_DAYS=30
@@ -238,7 +248,7 @@ Force-refresh image to the resolved latest OpenCode and Playwright versions:
 ```bash
 OPENCODE_VERSION="$(npm view opencode-ai version)"
 PLAYWRIGHT_VERSION="$(npm view @playwright/test version)"
-docker build --pull --build-arg BASE_IMAGE=node:22-slim --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_NPM_PACKAGE=opencode-ai --build-arg OPENCODE_VERSION="${OPENCODE_VERSION}" --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 --build-arg PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
+docker build --pull --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_VERSION="${OPENCODE_VERSION}" --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 --build-arg PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
 
 ## Reverse Proxy (Nginx)

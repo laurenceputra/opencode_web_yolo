@@ -1,5 +1,7 @@
-ARG BASE_IMAGE=node:22-slim
-FROM ${BASE_IMAGE}
+FROM node:22-slim
+
+RUN node_version="$(node --version)" \
+  && printf '%s\n' "${node_version}" | grep -Eq '^v22\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV OPENCODE_WEB_YOLO_HOME=/home/opencode
@@ -22,9 +24,8 @@ RUN apt-get update \
     tini \
   && rm -rf /var/lib/apt/lists/*
 
-ARG OPENCODE_NPM_PACKAGE=opencode-ai
 ARG OPENCODE_VERSION=latest
-RUN npm install -g "${OPENCODE_NPM_PACKAGE}@${OPENCODE_VERSION}"
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
 ARG OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 ARG PLAYWRIGHT_VERSION=1.62.1
@@ -44,6 +45,11 @@ RUN if [ "${OPENCODE_WEB_BUILD_WRANGLER}" = "1" ]; then \
 
 ARG WRAPPER_VERSION=0.0.0
 RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
+  && node_version="$(node --version)" \
+  && node_major="${node_version#v}" \
+  && node_major="${node_major%%.*}" \
+  && printf '%s\n' "${node_version}" >/opt/opencode-web-yolo-node-version \
+  && printf '%s\n' "${node_major}" >/opt/opencode-web-yolo-node-major \
   && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version \
   && printf '%s\n' "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" >/opt/opencode-web-yolo-playwright \
