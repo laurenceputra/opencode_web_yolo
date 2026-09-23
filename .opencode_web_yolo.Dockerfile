@@ -1,4 +1,4 @@
-FROM node:22-slim
+FROM node:25-slim
 
 RUN node_version="$(node --version)" \
   && printf '%s\n' "${node_version}" | grep -Eq '^v22\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
