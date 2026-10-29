@@ -105,6 +105,7 @@ existing_data="${TMP_DIR}/custom-xdg-data"
 existing_db="${existing_data}/opencode/opencode.db"
 mkdir -p "$(dirname "$existing_db")"
 : >"$existing_db"
+# shellcheck disable=SC2016 # Expand passwords in the inner shell after entrypoint normalization, not in this test shell.
 existing_output="$(OPENCODE_PASSWORD=conflicting run_entrypoint "$existing_home" "$existing_data" sh -c 'test "$OPENCODE_PASSWORD" = "$OPENCODE_SERVER_PASSWORD"' 2>&1)"
 assert_contains "$existing_output" "VACUUM: compacting OpenCode database at ${existing_db}"
 assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=timeout --kill-after=5 300 sqlite3 -cmd .timeout 5000 ${existing_db} VACUUM;"

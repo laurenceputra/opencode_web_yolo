@@ -17,7 +17,7 @@ assert_contains "$dockerfile_contents" "/opt/opencode-web-yolo-node-version"
 assert_contains "$dockerfile_contents" "/opt/opencode-web-yolo-node-major"
 assert_contains "$dockerfile_contents" "npm install -g \"@opencode/cli@\${OPENCODE_VERSION}\""
 assert_contains "$dockerfile_contents" "ARG OPENCODE_VERSION=2.2.1"
-assert_contains "$dockerfile_contents" 'opencode_version="$(opencode --version)"'
+assert_contains "$dockerfile_contents" "opencode_version=\"\$(opencode --version)\""
 assert_contains "$dockerfile_contents" '(?:opencode v)?'
 assert_not_contains "$dockerfile_contents" "ARG OPENCODE_NPM_PACKAGE"
 assert_contains "$dockerfile_contents" "mkdir -p \"\${PLAYWRIGHT_BROWSERS_PATH}\""
