@@ -20,6 +20,7 @@ EOF
 chmod +x "$tmp/bin/docker"
 export PATH="$tmp/bin:$PATH" HOME="$tmp" XDG_CONFIG_HOME="$tmp/xdg-config" XDG_DATA_HOME="$tmp/xdg-data"
 export DOCKER_LOG="$tmp/docker.log"
+# shellcheck disable=SC2016 # Backticks are literal Markdown fences in the JavaScript regex, not shell substitutions.
 commands="$(node -e 'const s=require("node:fs").readFileSync(process.argv[1],"utf8"); console.log(s.match(/```bash\n([\s\S]*?)```/)[1])' "$ROOT_DIR/OPENCODE_2_MIGRATION.md")"
 backup='' # Assigned by the documented commands evaluated below.
 eval "$commands"
@@ -30,6 +31,7 @@ test "$(cat "$backup/data/history")" = baseline
 test "$(cat "$tmp/live/data/history")" = baseline
 test "$(cat "$backup/image-id")" = sha256:retained-baseline
 export OPENCODE_SERVER_PASSWORD=ci-rollback-password
+# shellcheck disable=SC2016 # Backticks are literal Markdown fences in the JavaScript regex, not shell substitutions.
 commands="$(node -e 'const s=require("node:fs").readFileSync(process.argv[1],"utf8"); console.log([...s.matchAll(/```bash\n([\s\S]*?)```/g)][1][1])' "$ROOT_DIR/OPENCODE_2_MIGRATION.md")"
 eval "$commands"
 test "$(cat "$backup/restored-data/history")" = baseline
