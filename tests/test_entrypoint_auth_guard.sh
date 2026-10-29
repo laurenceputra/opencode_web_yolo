@@ -24,9 +24,9 @@ if output="$(OPENCODE_SERVER_USERNAME=custom "${ROOT_DIR}/.opencode_web_yolo_ent
   fail "entrypoint custom username must fail"
 fi
 assert_contains "$output" "requires OPENCODE_SERVER_USERNAME=opencode"
-if output="$(OPENCODE_WEB_RETENTION_DAYS=30 "${ROOT_DIR}/.opencode_web_yolo_entrypoint.sh" true 2>&1)"; then
-  fail "entrypoint enabled retention must fail"
+if output="$(OPENCODE_SERVER_PASSWORD='' OPENCODE_WEB_RETENTION_DAYS=30 "${ROOT_DIR}/.opencode_web_yolo_entrypoint.sh" true 2>&1)"; then
+  fail "enabled retention must still require password"
 fi
-assert_contains "$output" "retention is unsupported on OpenCode 2.x"
+assert_contains "$output" "OPENCODE_SERVER_PASSWORD must be set and non-empty"
 
 printf '%s\n' "PASS: entrypoint password guard"

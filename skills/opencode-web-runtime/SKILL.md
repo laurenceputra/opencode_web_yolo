@@ -49,15 +49,14 @@ Enforce these contracts on every runtime change:
 
 # Retention lifecycle
 
-OpenCode 2.x exception: retention is unsupported. Fail fast on enabled settings
-in both wrapper and entrypoint; the following contracts describe only the retained
-legacy 1.18.x worker. Do not claim its mocked tests prove 2.x support.
+Retention defaults to 0; positive days enable automatic best-effort 2.x cleanup
+without a maintenance gate. Require completed v1 migration before listing/deleting.
 
-- For enabled retention, start the scheduler only after authenticated `/global/health` succeeds; forward TERM/INT, stop it with the app, and return the app status.
+- For enabled retention, start the scheduler only after authenticated `/api/info` succeeds; forward TERM/INT, terminate/reap worker and sleep, stop it with the app, and return the app status.
 - Run retention as the mapped user and persist its success marker under `XDG_STATE_HOME`; do not use a restart-resetting sleep schedule.
 - Use OpenCode's authenticated experimental global session listing and delete endpoint, serially, with strict response validation and fail-closed behavior. Never mutate SQLite directly.
 - Install/use `tini` as PID 1 with subreaping and process-group signal forwarding; do not remap SIGINT to TERM in the supervisor.
-- Bound every retention worker fetch, gate on a tested healthy OpenCode 1.18.x version, re-check active status before each deletion, and verify deletion disappearance before advancing state.
+- Bound every fetch, require canonical stable 2.x metadata, recheck complete hierarchy/family cutoff/migration/inboxes/active before each serial DELETE 204, and verify every observed family member is 404 before advancing state. Require root and all descendants strictly older than cutoff. Document process-local foreground/background blind spots and non-atomic TOCTOU; DELETE interrupts, not an idle guard.
 
 # Guardrails
 

@@ -93,6 +93,9 @@ jobs:
           node --check tests/real_v2_smoke.cjs
           node --check tests/real_v2_browser.cjs
           node --check tests/real_v1_migration.cjs
+          node --check tests/retention_v2.cjs
+          node --check tests/retention_lifecycle.cjs
+          node --check tests/real_v2_retention.cjs
 
   behavior-checks:
     runs-on: ubuntu-latest
@@ -140,6 +143,9 @@ jobs:
       - name: Validate required binaries
         run: |
           docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v sqlite3 && command -v timeout && command -v tini && opencode serve --help'
+      - name: Real v2 retention deletion and persistence acceptance
+        timeout-minutes: 5
+        run: node tests/real_v2_retention.cjs
       - name: Build pinned v1 baseline acceptance image
         if: matrix.release == 'baseline'
         run: docker build -f tests/fixtures/v1-runtime.Dockerfile -t opencode_web_yolo:ci-v1 .

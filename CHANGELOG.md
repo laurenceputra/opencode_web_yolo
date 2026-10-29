@@ -2,8 +2,14 @@
 
 All notable changes to this project are documented here.
 
-## 0.6.0
+## 0.6.0 - Unreleased
 
+- Retain and accumulate observed retention family IDs across pagination refreshes;
+  defer without a marker if a known member disappears or changes linkage/location.
+  Directly recheck every member's identity/linkage/location/age before final
+  inbox/activity checks, and verify deletion against the accumulated family.
+  Add deterministic moving-cursor and direct-refresh regressions; cleanup remains
+  best-effort rather than atomic.
 - Ship the migration runbook with installed assets; isolate symlinked backup roots
   and use verified retained image IDs for rollback without pulls/builds/updates.
 - Add real pinned v1 transcript/config/dummy-auth migration and restore acceptance,
@@ -14,7 +20,13 @@ All notable changes to this project are documented here.
   versions even on rebuild; fresh/incompatible images use tested baseline 2.2.1.
   Keep Node 22 and persistent config/data roots; reject malformed/3.x registry results.
 - Forward required wrapper password as preferred `OPENCODE_PASSWORD`, reject custom
-  usernames, and fail fast on enabled retention until a tested 2.x port exists.
+  usernames. Retention is ported to stable 2.x APIs: default disabled, automatic
+  best-effort family-age cleanup with migration deferral, running/queued checks,
+  opaque pagination, serial DELETE 204 and root/descendant 404 verification.
+  Recent descendants protect their families. Persistent weekly markers and
+  preview remain; activity checks have documented background/TOCTOU limits,
+  not an atomic guarantee. Add deterministic v2 mocks and baseline/latest
+  real-image deletion/persistence acceptance.
 - Update proxy/API guidance and real-image CI for v2 UI/assets, auth, SSE and
   persistent session recreation. Add copy-first migration/backup/restore runbook.
 

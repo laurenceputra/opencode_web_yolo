@@ -25,8 +25,12 @@ API access. Preserve paths, cookies, authorization and query strings at the prox
 
 ## Backup, copy-first trial, cutover
 
-1. Disable retention (`OPENCODE_WEB_RETENTION_DAYS=0`); positive values now fail
-   fast. Do not attempt to use the legacy 1.18.x retention worker on 2.x.
+1. Disable retention (`OPENCODE_WEB_RETENTION_DAYS=0`) during the copy-first trial.
+   The 2.x worker automatically defers until v1 migration reports completed.
+   After validating history, preview before re-enabling age-based cleanup. Every
+   descendant must be old and observed running/queued families are skipped, but
+   activity checks are best-effort (process-local foreground only, background
+   blind spot and non-atomic TOCTOU race); DELETE can interrupt new activity.
 2. Stop the old container cleanly (`docker stop opencode_web_yolo`). Ensure no
    host OpenCode process or other container is writing the same config/data.
 3. Preserve the **running old container's** image ID (not a possibly moved tag)

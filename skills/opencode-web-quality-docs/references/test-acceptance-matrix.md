@@ -30,16 +30,19 @@ Use this matrix when authoring tests under `tests/`.
 - Docs contract check ensures Apache streams `/api/event` and websocket `/api/pty`, and excludes stale `/session/event`.
 - OpenCode 2.x acceptance must include real-image UI/assets, protected `/api/info`
   auth, SSE, and session create/read across container recreation with host state.
-  Mocked legacy retention tests are not 2.x acceptance. Assert enabled retention
-  and custom username fail, and preferred password is derived from required legacy input.
+  Real-image retention must test preview/no marker, recursive eligible/archived
+  deletion, young descendant and queued preservation, marker persistence and
+  recreation in both baseline/latest stable-2 lanes using APIs/clock override,
+  never raw SQLite fixtures. Custom username fails; positive retention is enabled.
 - Health/diagnostics command reports key prerequisites and failures clearly.
 - Startup VACUUM tests cover existing and missing databases, custom XDG data paths, mapped-user execution, the 5000 ms SQLite busy timeout, the configurable positive `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` TERM deadline bounded to `2147483647` (default 300) with fixed KILL escalation 5 seconds later, concise ordinary-failure warnings, timeout-expiry warnings containing the effective TERM deadline, and no manual WAL/SHM/journal sidecar mutation.
 - Retention accepts both flag forms, honors config/flag precedence, rejects invalid values, and propagates dry-run state.
 - Retention tests cover cutoff/pagination/root filtering, active-session skips, serial deletion, API incompatibility/failure, marker success/failure/retry, and scheduler signal/exit behavior.
-- Retention tests cover complete cross-directory hierarchy mapping, active descendants/unknown IDs, stale root refreshes, status changes before deletion, DELETE-true-but-still-present direct-GET verification, request timeout, supported-version gating, future markers, invalid poll intervals, exact query/cursor use, and malformed responses.
+- Retention tests cover complete cross-location hierarchy mapping, young descendants, active/queued descendants and unknown IDs, migration deferral, refresh changes, DELETE-204-but-root/child-still-present verification, timeouts, stable-2 gating, future markers, invalid polls, unfiltered listing/opaque cursor loops and malformed responses. Document background blind spots and non-atomic TOCTOU.
 
 ## Test Design Rules
 
+- Deterministically simulate an old child becoming recent between pre-delete pages and moving ahead of the cursor: a valid refreshed listing omits it, but no DELETE or marker is allowed. Also cover direct-member refresh becoming recent, mismatched identity/linkage/location, missing direct responses, newly accumulated descendants and final inbox/active ordering after direct age checks.
 - Execute the runbook copy commands against top-level symlink roots and assert
   trial writes cannot mutate live/backup files. Verify installed runbook availability.
 - Migration acceptance must read real pinned v1 session/message state before

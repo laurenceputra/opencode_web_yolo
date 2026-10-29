@@ -24,10 +24,6 @@ while [ "${OPENCODE_WEB_RETENTION_DAYS#0}" != "$OPENCODE_WEB_RETENTION_DAYS" ]; 
   OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_RETENTION_DAYS#0}"
 done
 OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_RETENTION_DAYS:-0}"
-if [ "$OPENCODE_WEB_RETENTION_DAYS" != 0 ]; then
-  printf '%s\n' "[opencode_web_yolo] ERROR: Session retention is unsupported on OpenCode 2.x; set OPENCODE_WEB_RETENTION_DAYS=0." >&2
-  exit 1
-fi
 if [ "${OPENCODE_SERVER_USERNAME:-opencode}" != opencode ]; then
   printf '%s\n' "[opencode_web_yolo] ERROR: OpenCode 2.x requires OPENCODE_SERVER_USERNAME=opencode; custom usernames are unsupported." >&2
   exit 1

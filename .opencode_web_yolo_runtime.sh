@@ -50,10 +50,10 @@ health_ok() {
   if ! auth="$(node -e 'process.stdout.write(Buffer.from(`${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || ""}`).toString("base64"))')"; then
     return 1
   fi
-  if ! health_body="$(printf 'header = "Authorization: Basic %s"\n' "$auth" | curl --config - -fsS --max-time 2 "${RETENTION_URL}/global/health" 2>/dev/null)"; then
+  if ! health_body="$(printf 'header = "Authorization: Basic %s"\n' "$auth" | curl --config - -fsS --max-time 2 "${RETENTION_URL}/api/info" 2>/dev/null)"; then
     return 1
   fi
-  node -e 'const value = JSON.parse(require("fs").readFileSync(0, "utf8")); process.exit(value && value.healthy === true ? 0 : 1)' <<<"$health_body" >/dev/null 2>&1
+  node -e 'const value = JSON.parse(require("fs").readFileSync(0, "utf8")); process.exit(value && typeof value.version === "string" ? 0 : 1)' <<<"$health_body" >/dev/null 2>&1
 }
 
 wait_for_health() {
@@ -74,13 +74,21 @@ app_running() {
 }
 
 run_scheduler() {
+  local child_pid=""
+  # The scheduler owns and reaps both its worker and its sleep, including on shutdown.
+  trap 'if [ -n "$child_pid" ]; then kill -TERM "$child_pid" 2>/dev/null || true; wait "$child_pid" 2>/dev/null || true; fi; exit 0' TERM INT
   while [ "$stopping" -eq 0 ]; do
-    if ! OPENCODE_WEB_RETENTION_DAYS="$RETENTION_DAYS" \
+    OPENCODE_WEB_RETENTION_DAYS="$RETENTION_DAYS" \
       OPENCODE_WEB_RETENTION_URL="$RETENTION_URL" \
-      node "$RETENTION_HELPER" --run-once; then
+      node "$RETENTION_HELPER" --run-once &
+    child_pid=$!
+    if ! wait "$child_pid"; then
       printf '%s\n' "[opencode_web_yolo retention] WARNING: cleanup failed; success marker was not advanced. It will retry later." >&2
     fi
-    sleep "$RETENTION_POLL_SECONDS" || true
+    sleep "$RETENTION_POLL_SECONDS" &
+    child_pid=$!
+    wait "$child_pid" || true
+    child_pid=""
   done
 }
 

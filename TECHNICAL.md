@@ -18,7 +18,7 @@
   - fixed OpenCode npm package `@opencode/cli`, exact tested default `2.2.1`
   - fixed internal serve hostname `0.0.0.0`, runtime home `/home/opencode`, workdir `/workspace`, and cleanup behavior
 - Reverse proxy is expected in front of localhost bind.
-- Session retention is disabled and unsupported on 2.x; enabled settings fail fast.
+- Session retention defaults to 0 (disabled); positive days enable automatic best-effort 2.x family cleanup.
 
 ## Installation Contract
 
@@ -117,31 +117,27 @@ Entrypoint behavior:
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
 - after ownership and HOME/XDG setup, checks `${XDG_DATA_HOME}/opencode/opencode.db`; when present, runs `VACUUM;` through `sqlite3` via `gosu` as the mapped user with a 5000 ms busy timeout. `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` is a persistent positive integer bounded to `2147483647`, defaults to 300, and controls GNU `timeout`'s TERM deadline; KILL escalation remains fixed at 5 seconds. Missing databases are skipped without creation. Ordinary vacuum failures warn concisely, while timeout-expiry warnings include the effective TERM deadline; neither blocks direct or retention-supervised OpenCode launch. This startup maintenance is separate from retention, whose worker never uses raw SQL or mutates SQLite WAL/SHM files.
-- rejects enabled retention before launch on 2.x; the packaged legacy supervisor
-  is not used by this release's supported startup path.
+- enabled retention executes the supervisor as the mapped user after HOME/XDG setup.
 - Docker starts `tini -s -g` so orphaned descendants are reaped and TERM/INT are forwarded to the child process group. The supervisor preserves the received signal when forwarding it to the app.
 - does not inject unsupported OpenCode CLI flags for instruction loading.
 - relies on OpenCode's native rules discovery (project AGENTS/CLAUDE files and global config-path rules).
 
 ## Session Retention
 
-**Disabled and unsupported on OpenCode 2.x.** Any positive retention setting
-fails fast in both wrapper and image entrypoint; use `OPENCODE_WEB_RETENTION_DAYS=0`.
-The following is historical documentation of the retained 1.18.x worker only,
-not an implemented 2.x retention port. Legacy worker tests remain mock tests.
-
+- Wire contracts are sourced from upstream tag `v2.2.1`: `packages/protocol/src/groups/session.ts`, `packages/schema/src/session-inbox.ts`, and `packages/server/src/handlers/session.ts`. The active API explicitly describes process-local foreground drains, not an atomic idle proof.
 - `OPENCODE_WEB_RETENTION_DAYS` is a non-negative integer; `0` disables cleanup. `--retention-days N` and `--retention-days=N` override it for one invocation.
 - `OPENCODE_WEB_RETENTION_DRY_RUN=1` previews without deleting or advancing state.
-- After authenticated health succeeds, the scheduler calls OpenCode 1.18.25's experimental complete global listing API: `GET /experimental/session?roots=false&archived=true&limit=100`, following its `x-next-cursor` pagination header. It validates the response, builds a complete root-ancestor map across directories, and fails closed on missing parents, cycles, duplicate IDs, or incompatible shapes.
-- Before listing or deleting, the worker validates `/global/health` and accepts only a healthy `1.18.x` version. Every worker fetch has an `AbortSignal.timeout` deadline controlled by `OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS`; deletion verification has its own bounded timeout.
-- Candidates are root sessions whose `time.updated` (epoch milliseconds) is strictly older than `now - retention_days`. Status is checked through authenticated `GET /session/status?directory=...` for every directory in the complete hierarchy; every `busy`/`retry` ID must map to a listed session and its root, otherwise the run fails closed. A busy/retrying descendant blocks its mapped candidate root even when the child is in another directory.
-- Immediately before each delete, the root is refreshed through `GET /session/:sessionID?directory=...`; a missing, non-root, mismatched, or refreshed/recent session is skipped. The complete hierarchy and all relevant statuses are then reloaded before serial authenticated `DELETE /session/:sessionID?directory=...`.
-- Each successful delete is verified by bounded polling of the direct `GET /session/:sessionID?directory=...` until it returns HTTP 404/not-found; other errors remain failures. OpenCode owns recursive cleanup of children, messages, parts, and events. No raw SQL or SQLite WAL/SHM mutation is performed.
-- Because the experimental cursor is only `time.updated`, a full page whose final timestamp is duplicated is rejected as an unsafe equal-timestamp boundary; other equal-timestamp cases remain an upstream completeness limitation.
+- Automatic best-effort cleanup requires no maintenance gate. Authenticated `/api/info` must identify canonical stable 2.x; `/api/experimental/migration/v1` must report `status: completed`. Required/running/error migration defers with no marker. Automatic stable-2 updates remain enabled; response validation fails closed on incompatible APIs.
+- The complete listing is `GET /api/session?limit=100` with no archived, parent, directory, project or location filter. Both archive states and every hierarchy level are included. Validate the `data` array and `cursor` object; follow opaque `cursor.next` until absent, including a nonempty last page with a next cursor. Reject malformed cursors, loops, duplicate IDs, missing parents and cycles. Session location is `location.directory`, not legacy `directory`.
+- Every member of a candidate root family must have safe-integer epoch-millisecond `time.updated` strictly older than `now - days * 86400000`; equality and young descendants preserve the entire family.
+- `/api/session/active` returns `{data: {ID: {type: "running"}}}`. Every ID must map to the complete hierarchy; a running descendant protects its root. `/api/session/:id/inbox` returns `{data: [...]}` of enqueued user/synthetic/compaction/move items with id, sessionID, payload, delivery (queue/steer), and time.created. Any nonempty member inbox protects its root. Unknown/malformed responses fail closed.
+- Before each serial `DELETE /api/session/:id`, refresh migration, complete hierarchy, family cutoff, active map and all inboxes. DELETE must return empty HTTP 204. Verify the root and every observed descendant through direct GET 404 polling before advancing state. OpenCode owns recursive deletion and interruption; never mutate raw SQL or WAL/SHM files.
+- Retain initial candidate family IDs and accumulate descendants across refreshed listings; never shrink a known family. Every previously observed member must remain accounted for under the same root with unchanged parent linkage/location, otherwise abort/defer the pass without a marker. Before DELETE, directly GET every accumulated member and validate identity, parent linkage, location and current age against the refreshed hierarchy/cutoff. A directly observed recent member preserves the family. Final inbox/active checks follow these direct age checks, and deletion verification covers the accumulated ID set. This guards against an updated child moving ahead of a pagination cursor, but listings/direct reads are still non-atomic and later updates/new children remain a best-effort limitation.
+- Every fetch has an `AbortSignal.timeout` deadline (`OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS`, default 10000); each member's deletion verification has a bounded timeout (`OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS`, default 10000).
 - A successful, non-preview run atomically writes `${XDG_STATE_HOME}/session-retention.last-success`. The marker is persistent because `XDG_STATE_HOME` is within the mounted OpenCode data path. Missing/old markers run immediately/when due; failures leave the marker unchanged for retry.
 - The scheduler polls without a cron dependency and stops when OpenCode exits. It never logs session titles or content.
 - `OPENCODE_WEB_RETENTION_POLL_SECONDS` is a positive integer with a one-second minimum; the production default is 3600 seconds.
-- OpenCode does not provide an atomic delete-if-idle operation. The direct root refresh and immediate hierarchy/status recheck narrow the status-to-delete race, while OpenCode's authenticated deletion/cancellation behavior is the final guard; absolute active-session safety cannot be guaranteed.
+- No atomic guarantee: activity is process-local foreground only, with background-tool/other-process blind spots. A TOCTOU race permits new work/children after checks; DELETE interrupts rather than atomically refusing active families. Keep retention disabled when these best-effort limits are unacceptable.
 
 ## Proxy Streaming Notes
 

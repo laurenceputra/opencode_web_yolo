@@ -1,5 +1,15 @@
 # Weekly OpenCode Session Retention
 
+> Historical 1.18.x design below, superseded for 0.6.0 by TECHNICAL.md's
+> Session Retention contract. The approved 2.x port is automatic best-effort,
+> default 0, no maintenance gate. Root and all descendants must be strictly old;
+> running/queued families are skipped. Completed v1 migration, unfiltered v2
+> data/cursor pagination, refreshed hierarchy/inboxes/active checks, DELETE 204
+> and root/descendant 404 verification replace the legacy APIs. Process-local
+> foreground visibility has background blind spots; TOCTOU remains and DELETE
+> interrupts execution, with no atomic guarantee. Baseline/latest real-image
+> acceptance and deterministic v2 mocks replace legacy mock-only evidence.
+
 ## Objective
 
 Optionally remove inactive OpenCode root sessions older than a configured number
