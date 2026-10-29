@@ -220,6 +220,8 @@ Cleanup requires stable 2.x `/api/info` metadata and completed
 without advancing the marker. `/api/session?limit=100` is intentionally unfiltered:
 both archive states, all locations and all hierarchy levels are included. The
 worker follows opaque `cursor.next` values to a terminal page, validates the
+cursor fields as absent/null or nonempty strings (published 2.2.1/2.2.2 use null
+for both cursors on the empty terminal page), checks the
 complete hierarchy, and fails closed on malformed responses, duplicate IDs,
 missing parents, cycles or cursor loops. A root **and every descendant** must have
 `time.updated` strictly older than the cutoff; a recent child protects the family.

@@ -42,6 +42,7 @@ Use this matrix when authoring tests under `tests/`.
 
 ## Test Design Rules
 
+- Real-package cursor regression: cover string cursors on nonempty pages followed by an empty page with explicit null previous/next, plus absent fields, null fields on nonempty pages, and rejected empty/nonstrings. Use `OPENCODE_TEST_CLI` with the isolated real retention acceptance harness when Docker is unavailable; keep Docker CI lanes for entrypoint/ownership verification.
 - Deterministically simulate an old child becoming recent between pre-delete pages and moving ahead of the cursor: a valid refreshed listing omits it, but no DELETE or marker is allowed. Also cover direct-member refresh becoming recent, mismatched identity/linkage/location, missing direct responses, newly accumulated descendants and final inbox/active ordering after direct age checks.
 - Execute the runbook copy commands against top-level symlink roots and assert
   trial writes cannot mutate live/backup files. Verify installed runbook availability.

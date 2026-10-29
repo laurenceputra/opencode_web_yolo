@@ -47,7 +47,17 @@ async function test(mode) {
         sessions.find(s => s.id === 'child').time.updated = cutoff
         return send({ data: [], cursor: {} })
       }
-      assert.ok(cursor === null || cursor === 'opaque+/=' || mode === 'terminal-extra' && cursor === 'terminal')
+      assert.ok(cursor === null || cursor === 'opaque+/=' || ['terminal-extra', 'real-cursors'].includes(mode) && cursor === 'terminal')
+      // Published 2.2.1/2.2.2 return string cursors on nonempty pages, then
+      // {previous:null,next:null} on the empty terminal page, not omitted keys.
+      if (mode === 'real-cursors') {
+        if (cursor === 'terminal' || sessions.length === 0 || cursor && sessions.length <= 2) return send({ data: [], cursor: { previous: null, next: null } })
+        return send({ data: cursor ? sessions.slice(2) : sessions.slice(0, 2), cursor: { previous: 'opaque-previous', next: cursor ? 'terminal' : 'opaque+/=' } })
+      }
+      if (mode === 'null-cursors') return send({ data: sessions, cursor: { previous: null, next: null } })
+      if (mode === 'bad-previous') return send({ data: sessions, cursor: { previous: 42, next: null } })
+      if (mode === 'empty-previous') return send({ data: sessions, cursor: { previous: '', next: null } })
+      if (mode === 'empty-cursor') return send({ data: sessions, cursor: { next: '' } })
       if (mode === 'terminal-extra' && cursor === 'terminal') return send({ data: [], cursor: {} })
       if (mode === 'terminal-extra' && cursor && sessions.length > 2) return send({ data: sessions.slice(2), cursor: { next: 'terminal' } })
       if (mode === 'bad-cursor') return send({ data: sessions, cursor: { next: 42 } })
@@ -105,7 +115,7 @@ async function test(mode) {
       assert.equal(fs.existsSync(marker), false)
     } else {
       const result = await run()
-      const failed = ['cursor-move', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'cycle', 'orphan', 'duplicate', 'malformed', 'loop', 'bad-cursor', 'no-cursor', 'bad-page', 'empty-next', 'unknown', 'bad-active', 'bad-inbox', 'wrong-inbox', 'unsupported', 'timeout', 'still-present', 'child-present', 'bad-delete'].includes(mode) || mode.startsWith('migration-')
+      const failed = ['bad-previous', 'empty-previous', 'empty-cursor', 'cursor-move', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'cycle', 'orphan', 'duplicate', 'malformed', 'loop', 'bad-cursor', 'no-cursor', 'bad-page', 'empty-next', 'unknown', 'bad-active', 'bad-inbox', 'wrong-inbox', 'unsupported', 'timeout', 'still-present', 'child-present', 'bad-delete'].includes(mode) || mode.startsWith('migration-')
       assert.equal(result.code, failed ? 1 : 0, `${mode}: ${result.output}`)
       assert.equal(fs.existsSync(marker), !failed, `${mode}: marker`)
       if (!failed) {
@@ -134,7 +144,7 @@ async function test(mode) {
   }
 }
 ;(async () => {
-  for (const mode of ['normal', 'added-descendant', 'cursor-move', 'direct-young', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'terminal-extra', 'preview', 'young', 'queued', 'running', 'refresh-young', 'refresh-running', 'refresh-queued',
+  for (const mode of ['normal', 'real-cursors', 'null-cursors', 'bad-previous', 'empty-previous', 'empty-cursor', 'added-descendant', 'cursor-move', 'direct-young', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'terminal-extra', 'preview', 'young', 'queued', 'running', 'refresh-young', 'refresh-running', 'refresh-queued',
     'cycle', 'orphan', 'duplicate', 'malformed', 'loop', 'bad-cursor', 'no-cursor', 'bad-page', 'empty-next', 'unknown', 'bad-active', 'bad-inbox', 'wrong-inbox', 'unsupported', 'timeout',
     'migration-required', 'migration-running', 'migration-error', 'migration-change', 'still-present', 'child-present', 'bad-delete']) await test(mode)
   console.log('PASS: deterministic v2 API retention scenarios')

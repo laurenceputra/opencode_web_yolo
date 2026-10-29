@@ -163,8 +163,8 @@ async function listSessions() {
 
     const nextCursor = result.value.cursor.next
     const previous = result.value.cursor.previous
-    if (previous !== undefined && (typeof previous !== "string" || !previous.length)) throw new Error("invalid previous cursor")
-    if (nextCursor === undefined) return sessions
+    if (previous !== undefined && previous !== null && (typeof previous !== "string" || !previous.length)) throw new Error("invalid previous cursor")
+    if (nextCursor === undefined || nextCursor === null) return sessions
     if (typeof nextCursor !== "string" || !nextCursor.length || !result.value.data.length) {
       throw new Error("OpenCode global session API returned an invalid pagination cursor")
     }

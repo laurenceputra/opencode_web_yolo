@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## 0.6.0 - Unreleased
 
+- Accept explicit null pagination cursor fields returned by published OpenCode
+  2.2.1/2.2.2 terminal pages while still rejecting empty/malformed tokens. Add
+  matching deterministic fixtures and a local-CLI mode for the isolated real
+  deletion acceptance harness, alongside the existing Docker CI lanes.
 - Retain and accumulate observed retention family IDs across pagination refreshes;
   defer without a marker if a known member disappears or changes linkage/location.
   Directly recheck every member's identity/linkage/location/age before final
