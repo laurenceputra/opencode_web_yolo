@@ -714,18 +714,26 @@ show_health() {
 }
 
 resolve_expected_opencode_version() {
+  local resolved_version
+  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
+    printf '%s\n' "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
+    return 0
+  fi
   if is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}"; then
     debug "Skipping OpenCode npm version check."
     return 0
   fi
 
-  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
-    printf '%s\n' "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
-    return 0
+  if command -v npm >/dev/null 2>&1 && resolved_version="$(npm view @opencode/cli version 2>/dev/null)"; then
+    opencode_version_is_compatible "$resolved_version" || die "Registry returned unsupported or malformed @opencode/cli version: '${resolved_version}'. Expected exact stable 2.x."
+    printf '%s\n' "$resolved_version"
+  else
+    warn "Unable to resolve @opencode/cli; retaining compatible image version, or using tested baseline ${OPENCODE_DEFAULT_VERSION} for a fresh/incompatible image."
   fi
+}
 
-  # Release-owned exact version: never follow npm latest across untested releases.
-  printf '%s\n' "${OPENCODE_DEFAULT_VERSION}"
+opencode_version_is_compatible() {
+  [[ "$1" =~ ^2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 }
 
 resolve_expected_playwright_version() {
@@ -797,7 +805,7 @@ ensure_image() {
 
   reasons=()
   compatibility_rebuild_requires_pull=0
-  expected_opencode_version="$(resolve_expected_opencode_version || true)"
+  expected_opencode_version="$(resolve_expected_opencode_version)" || die "Cannot select a safe OpenCode version."
   expected_playwright_version="$(resolve_expected_playwright_version || true)"
 
   if ! docker image inspect "${OPENCODE_WEB_YOLO_IMAGE}" >/dev/null 2>&1; then
@@ -821,7 +829,10 @@ ensure_image() {
     fi
 
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
-    if [ -n "$expected_opencode_version" ] && [ "$image_opencode_version" != "$expected_opencode_version" ]; then
+    if [ -z "$expected_opencode_version" ] && opencode_version_is_compatible "$image_opencode_version"; then
+      expected_opencode_version="$image_opencode_version"
+    fi
+    if ! opencode_version_is_compatible "$image_opencode_version" || { ! is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}" && [ -n "$expected_opencode_version" ] && [ "$image_opencode_version" != "$expected_opencode_version" ]; }; then
       reasons+=("OpenCode version mismatch (image='${image_opencode_version:-missing}', expected='${expected_opencode_version}')")
     fi
 
@@ -1088,7 +1099,7 @@ main() {
   [ "${OPENCODE_SERVER_USERNAME}" = opencode ] || die "OpenCode 2.x requires OPENCODE_SERVER_USERNAME=opencode; custom usernames are unsupported."
   [ "${OPENCODE_WEB_RETENTION_DAYS}" = 0 ] || die "Session retention is unsupported on OpenCode 2.x; set OPENCODE_WEB_RETENTION_DAYS=0."
   if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
-    [[ "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}" =~ ^2\.[0-9]+\.[0-9]+$ ]] || die "OPENCODE_WEB_EXPECTED_OPENCODE_VERSION must be an exact stable 2.x version."
+    opencode_version_is_compatible "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}" || die "OPENCODE_WEB_EXPECTED_OPENCODE_VERSION must be an exact stable 2.x version."
   fi
   OPENCODE_PASSWORD="${OPENCODE_SERVER_PASSWORD}"
   export OPENCODE_PASSWORD

@@ -186,10 +186,20 @@ and Wrangler drift still rebuilds without `--pull`; normal `OPENCODE_WEB_AUTO_PU
 continues to apply when `--no-pull` is not selected.
 
 OpenCode install target during build:
-- defaults to exact tested `2.2.1`; no npm latest lookup or automatic patch/minor/major adoption.
+- resolves `npm view @opencode/cli version` once; only canonical exact stable 2.x
+  (no leading zeros, prerelease, build suffix or whitespace) is accepted. Successful
+  malformed/unsupported responses fail before build or container replacement.
+  The same exact target drives comparison and build; never automatically install 3.x.
 - if `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` is set, it must be an exact stable `2.x.y`.
   Overrides are operator-tested; the release default is the acceptance-tested target.
-- Dockerfile also rejects non-exact/non-2.x targets. Skipping checks still builds the exact default.
+- Explicit pins bypass lookup. Lookup failures/missing npm warn and retain valid
+  exact 2.x image metadata, including during unrelated rebuilds; missing/incompatible
+  images use tested baseline 2.2.1, never reuse 1.x metadata. Skipping checks omits
+  lookup/drift comparison but preserves compatible image versions for other rebuilds;
+  an explicit pin controls the build. Direct Docker default remains 2.2.1 and uses
+  the same strict canonical validation. CI matrix tests baseline and latest stable
+  2.x on PR, scheduled and manual runs. No compatibility test guarantees rollback
+  of migrated data; restore pre-upgrade backups.
 - Config/data roots remain unchanged. See [migration runbook](OPENCODE_2_MIGRATION.md)
   for stopped-writer backups, copy-first trials, background/resumable v1 history migration,
   and rollback using restored pre-v2 state (never downgrade mutated data).

@@ -1,10 +1,14 @@
 # OpenCode 2.x migration runbook
 
-Wrapper 0.6.0 installs `@opencode/cli@2.2.1`. The exact tested default is
-release-owned: no npm `latest` lookup, automatic minor/patch adoption, or accidental
-major upgrade. A wrapper release changes the default. Advanced operators may set
-`OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` to an exact stable `2.x.y`; such overrides
-are not acceptance-tested. Skip-version-check still builds the exact default.
+Wrapper 0.6.0 resolves scoped `@opencode/cli` once and automatically adopts
+canonical exact stable 2.x releases, never 3.x. The release-tested baseline and
+direct Docker default are 2.2.1. Advanced operators may set
+`OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` to a canonical exact stable `2.x.y`; such overrides
+are operator-tested. Registry outages retain compatible exact 2.x image metadata
+even for unrelated rebuilds; fresh/incompatible images warn and use baseline 2.2.1.
+Skip-version-check preserves compatible image targets on rebuild, unless pinned.
+CI covers baseline and current stable 2.x, not every override or migration.
+No test guarantees rollback of migrated data: restore pre-upgrade backups.
 The old `opencode-ai` package is not the 2.x distribution. Node remains 22.
 
 ## Authentication and protocol

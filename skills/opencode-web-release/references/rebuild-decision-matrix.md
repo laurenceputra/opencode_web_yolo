@@ -36,9 +36,15 @@ Rebuild when any trigger is true:
   unmodified wrapper from `a95a84c349c67f4662913a1efb35519654e733ec`, not the
   current wrapper with only VERSION lowered. Ship the runbook as `OPENCODE_2_MIGRATION.md`.
 
-- OpenCode default is release-owned exact `@opencode/cli@2.2.1`, including
-  skip-check builds. Never resolve npm `latest`. Optional explicit overrides must
-  be stable exact 2.x versions; install and version policy must change together.
+- Resolve scoped `npm view @opencode/cli version` once; compare/build the same
+  canonical exact stable 2.x (no leading zeros). Explicit pins bypass lookup.
+  Successful malformed/3.x responses fail before builds/container replacement.
+  Outages retain valid exact 2.x image metadata even for unrelated rebuilds;
+  fresh/incompatible images warn and use tested baseline 2.2.1. Skip checks omit
+  lookup/drift comparison but preserve compatible image targets during rebuilds;
+  explicit pins control builds. Never reuse 1.x metadata. Direct Docker builds
+  remain baseline-pinned. Test baseline/latest 2.x real-image compatibility without
+  claiming migrated data can safely be downgraded.
 - Normalize CLI `opencode v2.x.y` output to bare `2.x.y` in image metadata and
   assert it equals the build target, otherwise every startup spuriously rebuilds.
 

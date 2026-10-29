@@ -13,7 +13,7 @@ async function main() {
   assert.equal((await request('/api/info', { headers: { authorization: 'Basic b3BlbmNvZGU6d3Jvbmc=' } })).status, 401)
   const info = await request('/api/info', { headers: { authorization: auth } })
   assert.equal(info.status, 200)
-  assert.equal((await info.json()).version, '2.2.1')
+  assert.equal((await info.json()).version, process.env.OPENCODE_TEST_VERSION || '2.2.1')
   if (mode === 'create') {
     const ui = await request('/')
     assert.equal(ui.status, 200)

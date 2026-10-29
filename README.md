@@ -159,9 +159,18 @@ Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized
 
 ### OpenCode 2.x upgrade
 
-The runtime uses exact `@opencode/cli@2.2.1` (not `opencode-ai`), still launched
-with `opencode serve`. Updates to this default require a wrapper release; optional
-exact stable 2.x overrides are operator-tested, not automatic npm latest upgrades.
+The wrapper resolves scoped `@opencode/cli` once per startup and automatically
+adopts stable canonical exact 2.x releases, still launched with `opencode serve`.
+Successful malformed or unsupported (including 3.x) registry results fail before
+build or container replacement. `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION=2.2.1`
+pins an exact stable 2.x target without a registry lookup. During registry outages,
+valid exact 2.x image metadata is retained even for unrelated rebuilds; fresh or
+incompatible images use release-tested baseline 2.2.1 with a warning. Skipped version
+checks also preserve compatible image versions on rebuild, with explicit pins
+controlling builds. Direct Docker builds default to pinned baseline 2.2.1.
+CI tests both that baseline and current stable 2.x, not every historical release.
+Back up before upgrades: compatibility testing cannot guarantee rollback of
+migrated data; restore pre-upgrade state rather than downgrade mutated data.
 Read the [backup/copy/restore migration runbook](OPENCODE_2_MIGRATION.md)
 **before** starting 2.x against existing data. Histories migrate in the background.
 Keep the wrapper's mandatory `OPENCODE_SERVER_PASSWORD`; it is forwarded as both

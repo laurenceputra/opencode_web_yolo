@@ -25,7 +25,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ARG OPENCODE_VERSION=2.2.1
-RUN node -e 'if (!/^2\.[0-9]+\.[0-9]+$/.test(process.argv[1])) process.exit(1)' "${OPENCODE_VERSION}" \
+RUN node -e 'const v = process.argv[1]; const m = v.match(/^2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/); if (!m || m[0] !== v) process.exit(1)' "${OPENCODE_VERSION}" \
     && npm install -g "@opencode/cli@${OPENCODE_VERSION}"
 
 ARG OPENCODE_WEB_BUILD_PLAYWRIGHT=0
