@@ -157,6 +157,17 @@ Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized
 
 ## Persistence Paths
 
+### OpenCode 2.x upgrade
+
+The runtime uses exact `@opencode/cli@2.2.1` (not `opencode-ai`), still launched
+with `opencode serve`. Updates to this default require a wrapper release; optional
+exact stable 2.x overrides are operator-tested, not automatic npm latest upgrades.
+Read the [backup/copy/restore migration runbook](OPENCODE_2_MIGRATION.md)
+**before** starting 2.x against existing data. Histories migrate in the background.
+Keep the wrapper's mandatory `OPENCODE_SERVER_PASSWORD`; it is forwarded as both
+legacy and preferred `OPENCODE_PASSWORD`. Username must be `opencode`.
+The public UI shell serves sign-in; protected APIs use `/api` (diagnostic `/api/info`).
+
 - Wrapper config file: `~/.opencode_web_yolo/config`
 - OpenCode config mount: `~/.config/opencode`
 - OpenCode data/state mount: `~/.local/share/opencode`
@@ -180,6 +191,11 @@ OpenCode API worker: it does not use raw SQL or manually modify SQLite WAL, SHM,
 sidecars.
 
 ## Weekly session retention
+
+**Unavailable on OpenCode 2.x.** Keep `OPENCODE_WEB_RETENTION_DAYS=0` (the default).
+Any positive value, including an old config or `--retention-days`, fails before launch.
+The following describes the retained **legacy 1.18.x worker only**, not a supported
+2.x feature; its mock tests are not evidence of 2.x compatibility.
 
 Enable retention in the generated config, or override it for one invocation:
 
@@ -248,10 +264,10 @@ export OPENCODE_SERVER_PASSWORD='change-me-now'
 mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode serve --hostname 0.0.0.0 --port 4096
 ```
 
-Force-refresh image to the resolved latest OpenCode and Playwright versions:
+Force-refresh image to the tested OpenCode release and current Playwright version:
 
 ```bash
-OPENCODE_VERSION="$(npm view opencode-ai version)"
+OPENCODE_VERSION=2.2.1 # @opencode/cli, not the old opencode-ai release line
 PLAYWRIGHT_VERSION="$(npm view @playwright/test version)"
 docker build --pull --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_VERSION="${OPENCODE_VERSION}" --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 --build-arg PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
@@ -280,6 +296,10 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 600s;
     }
 }
 ```
@@ -302,16 +322,14 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
     # Stream endpoints: keep long-lived SSE responses unbuffered/uncompressed.
     ProxyTimeout 600
     SetEnv proxy-sendchunked 1
-    SetEnvIfNoCase Request_URI "^/(global/event|event)" no-gzip=1
+    SetEnvIfNoCase Request_URI "^/api/event" no-gzip=1
 
-    ProxyPass        /global/event  http://127.0.0.1:4096/global/event  timeout=600 retry=0
-    ProxyPassReverse /global/event  http://127.0.0.1:4096/global/event
-    ProxyPass        /event http://127.0.0.1:4096/event timeout=600 retry=0
-    ProxyPassReverse /event http://127.0.0.1:4096/event
+    ProxyPass        /api/event http://127.0.0.1:4096/api/event timeout=600 retry=0
+    ProxyPassReverse /api/event http://127.0.0.1:4096/api/event
 
     # Terminal PTY endpoint uses websocket upgrades.
-    ProxyPass        /pty ws://127.0.0.1:4096/pty retry=0
-    ProxyPassReverse /pty ws://127.0.0.1:4096/pty
+    ProxyPass        /api/pty ws://127.0.0.1:4096/api/pty retry=0
+    ProxyPassReverse /api/pty ws://127.0.0.1:4096/api/pty
 
     ProxyPass        / http://127.0.0.1:4096/ timeout=120 retry=0
     ProxyPassReverse / http://127.0.0.1:4096/
@@ -352,7 +370,7 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
 - Run `opencode_web_yolo health` for Docker/image/auth diagnostics.
 - Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
-- If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/pty` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules).
+- If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/api/pty/:id/connect` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules). Preserve the query string containing the upstream-issued ticket; do not log tickets.
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.
 - Workspace UI state (for example expanded workspaces and last-open session shortcut) is stored in browser localStorage by OpenCode Web, so it is not shared across different browsers/profiles.
 - Session/project data still persists server-side in `~/.local/share/opencode/opencode.db`; use explicit session URLs (for example `/<workspace>/session/<id>`) when switching browsers.

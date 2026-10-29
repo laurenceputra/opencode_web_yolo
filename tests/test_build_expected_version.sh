@@ -77,7 +77,7 @@ if [ "${1:-}" = "view" ] && [ "${3:-}" = "version" ]; then
     printf '%s\n' "${2:-}" >>"${FAKE_NPM_LOG}"
   fi
   case "${2:-}" in
-    opencode-ai) printf '%s\n' '"1.2.15"' ;;
+    @opencode/cli) exit 1 ;; # The release default must not query npm latest.
     @playwright/test) printf '%s\n' '"1.62.1"' ;;
     *) exit 1 ;;
   esac
@@ -99,14 +99,15 @@ export FAKE_NPM_LOG="${TMP_DIR}/npm.log"
 
 output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
 
-assert_contains "$output" "OpenCode version mismatch (image='1.2.11', expected='1.2.15')"
+assert_contains "$output" "OpenCode version mismatch (image='1.2.11', expected='2.2.1')"
 assert_contains "$output" "Playwright build mismatch (image='0', expected='1')"
 assert_contains "$output" "Playwright version mismatch (image='1.62.0', expected='1.62.1')"
 assert_contains "$output" "Wrangler build mismatch (image='0', expected='1')"
 assert_contains "$output" "Building runtime image"
 
 build_invocation="$(tr -d '\n' <"${DOCKER_LOG}")"
-assert_contains "$build_invocation" "--build-arg OPENCODE_VERSION=1.2.15"
+assert_contains "$build_invocation" "--build-arg OPENCODE_VERSION=2.2.1"
+assert_not_contains "$(cat "$FAKE_NPM_LOG")" "@opencode/cli"
 assert_contains "$build_invocation" "--build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1"
 assert_contains "$build_invocation" "--build-arg PLAYWRIGHT_VERSION=1.62.1"
 assert_contains "$build_invocation" "--build-arg OPENCODE_WEB_BUILD_WRANGLER=1"
@@ -126,6 +127,7 @@ output_skip="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
 assert_not_contains "$output_skip" "Playwright version mismatch"
 build_invocation_skip="$(tr -d '\n' <"${DOCKER_LOG}")"
 assert_contains "$build_invocation_skip" "--build-arg PLAYWRIGHT_VERSION=1.62.1"
+assert_contains "$build_invocation_skip" "--build-arg OPENCODE_VERSION=2.2.1"
 if [ -s "${FAKE_NPM_LOG}" ]; then
   fail "version checks must not query npm when OPENCODE_WEB_SKIP_VERSION_CHECK=1"
 fi
@@ -140,7 +142,7 @@ assert_contains "$build_invocation_skip_fallback" "--build-arg PLAYWRIGHT_VERSIO
 : >"${DOCKER_LOG}"
 unset OPENCODE_WEB_EXPECTED_PLAYWRIGHT_VERSION OPENCODE_WEB_SKIP_VERSION_CHECK
 export OPENCODE_WEB_AUTO_PULL=0
-export FAKE_IMAGE_OPENCODE_VERSION=1.2.15
+export FAKE_IMAGE_OPENCODE_VERSION=2.2.1
 export FAKE_IMAGE_PLAYWRIGHT_BUILD=1
 export FAKE_IMAGE_PLAYWRIGHT_VERSION=1.62.1
 export FAKE_IMAGE_WRANGLER_BUILD=1

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0
+
+- Ship the migration runbook with installed assets; isolate symlinked backup roots
+  and use verified retained image IDs for rollback without pulls/builds/updates.
+- Add real pinned v1 transcript/config/dummy-auth migration and restore acceptance,
+  plus bounded browser navigation and overall deadlines.
+
+- Migrate the runtime to scoped `@opencode/cli` with exact tested default 2.2.1;
+  never follow npm latest automatically. Keep Node 22 and persistent config/data roots.
+- Forward required wrapper password as preferred `OPENCODE_PASSWORD`, reject custom
+  usernames, and fail fast on enabled retention until a tested 2.x port exists.
+- Update proxy/API guidance and real-image CI for v2 UI/assets, auth, SSE and
+  persistent session recreation. Add copy-first migration/backup/restore runbook.
+
 All notable changes to this project are documented here.
 
 ## [0.5.0] - 2026-09-20

@@ -101,6 +101,7 @@ fi
 if [ "$(readlink "${bin_dir}/opencode_web_yolo")" != "${install_home}/.opencode_web_yolo.sh" ]; then
   fail "opencode_web_yolo symlink target mismatch"
 fi
+test -s "${install_home}/OPENCODE_2_MIGRATION.md" || fail "installed README migration link must resolve"
 
 for required_file in "${required_files[@]}"; do
   if [ ! -f "${install_home}/${required_file}" ]; then

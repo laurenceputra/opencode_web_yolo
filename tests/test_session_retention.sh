@@ -27,25 +27,25 @@ export OPENCODE_WEB_SKIP_UPDATE_CHECK=1
 export OPENCODE_WEB_SKIP_VERSION_CHECK=1
 export OPENCODE_WEB_DRY_RUN=1
 
-output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --retention-days 5 2>&1)"
-assert_contains "$output" "retention_days=5"
-assert_contains "$output" "OPENCODE_WEB_RETENTION_DAYS=5"
-assert_contains "$output" "-e OPENCODE_SERVER_PASSWORD"
-assert_not_contains "$output" "secret"
-assert_contains "$output" "retention_poll_seconds=3600"
-assert_contains "$output" "retention_fetch_timeout_ms=10000"
-assert_contains "$output" "retention_verify_timeout_ms=10000"
-output_equals="$("${ROOT_DIR}/.opencode_web_yolo.sh" --retention-days=6 2>&1)"
-assert_contains "$output_equals" "retention_days=6"
+if output="$("${ROOT_DIR}/.opencode_web_yolo.sh" --retention-days 5 2>&1)"; then
+  fail "2.x retention must fail before startup"
+fi
+assert_contains "$output" "retention is unsupported on OpenCode 2.x"
+if output_equals="$("${ROOT_DIR}/.opencode_web_yolo.sh" --retention-days=6 2>&1)"; then
+  fail "2.x retention equals form must fail"
+fi
+assert_contains "$output_equals" "retention is unsupported on OpenCode 2.x"
 
 printf '%s\n' 'export OPENCODE_WEB_RETENTION_DAYS=7' >"${HOME}/.opencode_web_yolo-config.tmp"
 mkdir -p "${HOME}/.opencode_web_yolo"
 mv "${HOME}/.opencode_web_yolo-config.tmp" "${HOME}/.opencode_web_yolo/config"
 unset OPENCODE_WEB_RETENTION_DAYS
-output_config="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"
-assert_contains "$output_config" "retention_days=7"
-output_override="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run --retention-days 8 2>&1)"
-assert_contains "$output_override" "retention_days=8"
+if output_config="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run 2>&1)"; then
+  fail "enabled retention config must fail"
+fi
+assert_contains "$output_config" "retention is unsupported on OpenCode 2.x"
+output_override="$("${ROOT_DIR}/.opencode_web_yolo.sh" --dry-run --retention-days 0 2>&1)"
+assert_contains "$output_override" "retention_days=0"
 
 set +e
 rm -f "${HOME}/.opencode_web_yolo/config"

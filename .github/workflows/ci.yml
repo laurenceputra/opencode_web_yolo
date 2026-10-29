@@ -31,6 +31,7 @@ jobs:
           bash -n tests/test_entrypoint_home_pin.sh
           bash -n tests/test_startup_vacuum.sh
           bash -n tests/test_docs_apache_endpoints.sh
+          bash -n tests/test_migration_runbook.sh
           bash -n tests/test_help.sh
           bash -n tests/test_playwright_dockerfile_contract.sh
           bash -n tests/test_version_command.sh
@@ -67,6 +68,7 @@ jobs:
           shellcheck -x tests/test_entrypoint_home_pin.sh
           shellcheck -x tests/test_startup_vacuum.sh
           shellcheck -x tests/test_docs_apache_endpoints.sh
+          shellcheck -x tests/test_migration_runbook.sh
           shellcheck -x tests/test_help.sh
           shellcheck -x tests/test_playwright_dockerfile_contract.sh
           shellcheck -x tests/test_version_command.sh
@@ -83,13 +85,19 @@ jobs:
           shellcheck -x tests/run.sh
           shellcheck -x tests/version_guard.sh
       - name: JavaScript syntax check
-        run: node --check .opencode_web_yolo_retention.js
+        run: |
+          node --check .opencode_web_yolo_retention.js
+          node --check tests/real_v2_smoke.cjs
+          node --check tests/real_v2_browser.cjs
+          node --check tests/real_v1_migration.cjs
 
   behavior-checks:
     runs-on: ubuntu-latest
     needs: shell-lint
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Execute the actual immutable 0.5.0 updater regression.
       - name: Run behavior tests
         run: bash tests/run.sh
 
@@ -117,8 +125,14 @@ jobs:
       - name: Validate required binaries
         run: |
           docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'command -v gh && command -v git && command -v ssh && command -v sqlite3 && command -v timeout && command -v tini && opencode serve --help'
+      - name: Build pinned v1 baseline acceptance image
+        run: docker build -f tests/fixtures/v1-runtime.Dockerfile -t opencode_web_yolo:ci-v1 .
+      - name: Real baseline migration and rollback acceptance
+        timeout-minutes: 5
+        run: node tests/real_v1_migration.cjs
       - name: Validate Node 22 runtime metadata
         run: |
+          test "$(docker run --rm --entrypoint cat opencode_web_yolo:ci /opt/opencode-version)" = 2.2.1
           test "$(docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'node --version')" = "$(docker run --rm --entrypoint cat opencode_web_yolo:ci /opt/opencode-web-yolo-node-version)"
           test "$(docker run --rm --entrypoint cat opencode_web_yolo:ci /opt/opencode-web-yolo-node-major)" = 22
           docker run --rm --entrypoint sh opencode_web_yolo:ci -lc 'node_version="$(node --version)"; node_major="${node_version#v}"; node_major="${node_major%%.*}"; test "${node_major}" = 22'
@@ -217,10 +231,10 @@ jobs:
           unauthenticated_status=''
           health_body=''
           for attempt in $(seq 1 60); do
-            if unauthenticated_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${host_port}/global/health" 2>/dev/null)" \
+            if unauthenticated_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:${host_port}/api/info" 2>/dev/null)" \
               && [ "${unauthenticated_status}" = 401 ] \
-              && health_body="$(curl -fsS --max-time 2 -u 'opencode:ci-secret' "http://127.0.0.1:${host_port}/global/health" 2>/dev/null)" \
-              && node -e 'const value = JSON.parse(process.argv[1]); process.exit(value && value.healthy === true ? 0 : 1)' "${health_body}"; then
+              && health_body="$(curl -fsS --max-time 2 -u 'opencode:ci-secret' "http://127.0.0.1:${host_port}/api/info" 2>/dev/null)" \
+              && node -e 'const value = JSON.parse(process.argv[1]); process.exit(value && value.version === "2.2.1" ? 0 : 1)' "${health_body}"; then
               healthy=1
               break
             fi
@@ -231,6 +245,26 @@ jobs:
           done
           test "${unauthenticated_status}" = 401
           test "${healthy}" = 1
+          node tests/real_v2_smoke.cjs "http://127.0.0.1:${host_port}" create "${smoke_dir}/session-id"
+          # Recreate, not just restart: only host mounts may retain state.
+          docker stop "${container_name}"
+          docker rm "${container_name}"
+          test -n "$(ls -A "${smoke_dir}/data")"
+          docker run -d --name "${container_name}" \
+            -p "127.0.0.1:${host_port}:${host_port}" \
+            -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER=ci \
+            -e OPENCODE_SERVER_PASSWORD=ci-secret \
+            -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config \
+            -e XDG_DATA_HOME=/home/opencode/.local/share \
+            -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state \
+            -v "${smoke_dir}/config:/home/opencode/.config/opencode" \
+            -v "${smoke_dir}/data:/home/opencode/.local/share/opencode" \
+            opencode_web_yolo:ci opencode serve --hostname 0.0.0.0 --port "${host_port}"
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 2 -u opencode:ci-secret "http://127.0.0.1:${host_port}/api/info" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node tests/real_v2_smoke.cjs "http://127.0.0.1:${host_port}" read "${smoke_dir}/session-id"
       - name: Build Playwright-enabled runtime image
         run: |
           docker build \
@@ -252,6 +286,29 @@ jobs:
             done
             test "$found" = 1
           '
+
+      - name: Browser acceptance against real bundled UI
+        run: |
+          set -euo pipefail
+          container_name=opencode_web_yolo_ci_browser
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then docker logs "$container_name" || true; fi
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+          docker run -d --name "$container_name" \
+            -e OPENCODE_SERVER_PASSWORD=ci-secret \
+            -v "$PWD/tests:/tests:ro" \
+            opencode_web_yolo:ci-playwright \
+            opencode serve --hostname 0.0.0.0 --port 4096
+          for attempt in $(seq 1 60); do
+            if docker exec "$container_name" curl -fsS --max-time 2 -u opencode:ci-secret http://127.0.0.1:4096/api/info >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec "$container_name" node /tests/real_v2_browser.cjs http://127.0.0.1:4096
 
   version-discipline:
     runs-on: ubuntu-latest

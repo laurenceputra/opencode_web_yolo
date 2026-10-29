@@ -15,10 +15,10 @@
   - pull-on-start by default (`OPENCODE_WEB_AUTO_PULL=1`)
 - Runtime release defaults:
   - fixed Docker base image `node:22-slim`
-  - fixed OpenCode npm package `opencode-ai`
+  - fixed OpenCode npm package `@opencode/cli`, exact tested default `2.2.1`
   - fixed internal serve hostname `0.0.0.0`, runtime home `/home/opencode`, workdir `/workspace`, and cleanup behavior
 - Reverse proxy is expected in front of localhost bind.
-- Optional weekly session retention is disabled by default.
+- Session retention is disabled and unsupported on 2.x; enabled settings fail fast.
 
 ## Installation Contract
 
@@ -39,6 +39,11 @@
 
 Non-negotiable runtime checks:
 - `OPENCODE_SERVER_PASSWORD` must be set and non-empty before container startup.
+- Wrapper and entrypoint set preferred `OPENCODE_PASSWORD` from that required value,
+  overriding conflicting inherited values. Username is fixed `opencode`; custom
+  `OPENCODE_SERVER_USERNAME` values fail before launch.
+- The bundled UI shell/assets are public for sign-in; protected APIs require auth.
+  Readiness is authenticated `GET /api/info` with a `version` field, not `/global/health`.
 - Localhost is not exempt from password auth.
 - Host credentials are never mounted implicitly.
 
@@ -84,7 +89,7 @@ Docker image includes:
 - Debian coreutils `timeout`
 - runtime helpers (`gosu`, `sudo`, `passwd`, `ca-certificates`)
 - PID 1 init/subreaper (`tini`)
-- OpenCode CLI (`opencode-ai` npm package by default)
+- OpenCode CLI (`@opencode/cli@2.2.1` npm package by default)
 - when Playwright build is enabled: global `@playwright/test` package/`playwright` CLI and Chromium browser binaries in shared path (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`)
 - the browser install is executed by that exact installed package, coupling the Chromium revision to the package version used for the image
 - the global package is not a substitute for project dependencies: mounted projects should declare `@playwright/test` locally for normal Node.js imports
@@ -112,12 +117,18 @@ Entrypoint behavior:
 - installs passwordless sudo policy for mapped user.
 - executes command via `gosu`.
 - after ownership and HOME/XDG setup, checks `${XDG_DATA_HOME}/opencode/opencode.db`; when present, runs `VACUUM;` through `sqlite3` via `gosu` as the mapped user with a 5000 ms busy timeout. `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` is a persistent positive integer bounded to `2147483647`, defaults to 300, and controls GNU `timeout`'s TERM deadline; KILL escalation remains fixed at 5 seconds. Missing databases are skipped without creation. Ordinary vacuum failures warn concisely, while timeout-expiry warnings include the effective TERM deadline; neither blocks direct or retention-supervised OpenCode launch. This startup maintenance is separate from retention, whose worker never uses raw SQL or mutates SQLite WAL/SHM files.
-- when retention is enabled, starts OpenCode, waits for authenticated `/global/health`, and supervises a mapped-user scheduler; TERM/INT are forwarded and the app exit status is returned.
+- rejects enabled retention before launch on 2.x; the packaged legacy supervisor
+  is not used by this release's supported startup path.
 - Docker starts `tini -s -g` so orphaned descendants are reaped and TERM/INT are forwarded to the child process group. The supervisor preserves the received signal when forwarding it to the app.
 - does not inject unsupported OpenCode CLI flags for instruction loading.
 - relies on OpenCode's native rules discovery (project AGENTS/CLAUDE files and global config-path rules).
 
 ## Session Retention
+
+**Disabled and unsupported on OpenCode 2.x.** Any positive retention setting
+fails fast in both wrapper and image entrypoint; use `OPENCODE_WEB_RETENTION_DAYS=0`.
+The following is historical documentation of the retained 1.18.x worker only,
+not an implemented 2.x retention port. Legacy worker tests remain mock tests.
 
 - `OPENCODE_WEB_RETENTION_DAYS` is a non-negative integer; `0` disables cleanup. `--retention-days N` and `--retention-days=N` override it for one invocation.
 - `OPENCODE_WEB_RETENTION_DRY_RUN=1` previews without deleting or advancing state.
@@ -135,13 +146,13 @@ Entrypoint behavior:
 ## Proxy Streaming Notes
 
 - OpenCode browser output uses long-lived event streams.
-- OpenCode terminal sessions use websocket connections under `/pty` (for example `/pty/<id>/connect`).
+- OpenCode terminal sessions use websocket connections under `/api/pty` (for example `/api/pty/<id>/connect`), with upstream-issued tickets. Preserve query strings and avoid logging tickets.
 - Apache reverse proxy config must treat stream endpoints as SSE-style traffic:
-  - `/global/event` and `/event` must both be stream-safe
+  - `/api/event` must be stream-safe
   - longer proxy timeouts
   - chunked streaming enabled
   - compression disabled on event-stream routes
-- Reverse proxies must forward `/pty` with websocket upgrade semantics (`ws://` upstream on Apache with `mod_proxy_wstunnel`).
+- Reverse proxies must forward `/api/pty` with websocket upgrade semantics (`ws://` upstream on Apache with `mod_proxy_wstunnel`).
 - Websocket proxy rules are optional compatibility paths for non-PTY endpoints, not a replacement for stream-safe SSE handling.
 
 ## Update and Re-exec
@@ -175,8 +186,13 @@ and Wrangler drift still rebuilds without `--pull`; normal `OPENCODE_WEB_AUTO_PU
 continues to apply when `--no-pull` is not selected.
 
 OpenCode install target during build:
-- defaults to `latest` (`OPENCODE_VERSION=latest`)
-- if `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` is set, build installs that explicit version
+- defaults to exact tested `2.2.1`; no npm latest lookup or automatic patch/minor/major adoption.
+- if `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION` is set, it must be an exact stable `2.x.y`.
+  Overrides are operator-tested; the release default is the acceptance-tested target.
+- Dockerfile also rejects non-exact/non-2.x targets. Skipping checks still builds the exact default.
+- Config/data roots remain unchanged. See [migration runbook](OPENCODE_2_MIGRATION.md)
+  for stopped-writer backups, copy-first trials, background/resumable v1 history migration,
+  and rollback using restored pre-v2 state (never downgrade mutated data).
 
 Controls:
 - `--pull` or `OPENCODE_WEB_BUILD_PULL=1`
@@ -211,5 +227,19 @@ Tests and CI assert:
 - retention configuration, marker path, API schedule, and dry-run state.
 - retention API compatibility, active-session skipping, serial deletion, marker retry semantics, and supervisor signal/exit behavior.
 - Docker image build and runtime binary presence (`gh`, `git`, `ssh`, `sqlite3`), including a successful `opencode serve --help` check.
+- Real-image CI checks public UI/bundled JS, missing/wrong API auth, `/api/info`,
+  `/api/event` SSE, and session create/read after container recreation on identical
+  host-backed mounts. The Playwright-enabled image also checks browser password
+  connection and reload. This does not prove provider/model responses,
+  PTY interaction, TLS proxy behavior, or arbitrary historical migration correctness.
+- Baseline acceptance imports a sanitized user/assistant transcript using the actual
+  pinned `opencode-ai@1.19.5` CLI, reads it through v1 APIs, stops writers and clones
+  config/data, waits for `/api/experimental/migration/v1` completion on 2.2.1, checks
+  exact transcript content plus representative model config and dummy credential
+  import, recreates v2, and proves v1 reads the restored pre-v2 copy. This synthetic
+  fixture covers one baseline, not arbitrary provider/plugin/history migrations.
+- The migration runbook is a flat managed manifest asset, compatible with the
+  unmodified 0.5.0 updater's validator; backup regression tests execute its
+  exact commands against symlinked top roots, preserving nested symlinks.
 - startup VACUUM behavior for existing and missing databases, custom XDG data paths, mapped-user invocation, the configurable bounded TERM timeout plus fixed 5-second KILL escalation, warning-only failures, and continued application execution.
 - `VERSION` semver format and runtime-file/version drift guard.

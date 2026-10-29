@@ -49,6 +49,10 @@ Enforce these contracts on every runtime change:
 
 # Retention lifecycle
 
+OpenCode 2.x exception: retention is unsupported. Fail fast on enabled settings
+in both wrapper and entrypoint; the following contracts describe only the retained
+legacy 1.18.x worker. Do not claim its mocked tests prove 2.x support.
+
 - For enabled retention, start the scheduler only after authenticated `/global/health` succeeds; forward TERM/INT, stop it with the app, and return the app status.
 - Run retention as the mapped user and persist its success marker under `XDG_STATE_HOME`; do not use a restart-resetting sleep schedule.
 - Use OpenCode's authenticated experimental global session listing and delete endpoint, serially, with strict response validation and fail-closed behavior. Never mutate SQLite directly.

@@ -31,6 +31,17 @@ Rebuild when any trigger is true:
 
 ## Decision Rules
 
+- Keep managed release assets flat: the actual 0.5.0 updater validates the new
+  manifest before the new validator can be installed. Test upgrades using the
+  unmodified wrapper from `a95a84c349c67f4662913a1efb35519654e733ec`, not the
+  current wrapper with only VERSION lowered. Ship the runbook as `OPENCODE_2_MIGRATION.md`.
+
+- OpenCode default is release-owned exact `@opencode/cli@2.2.1`, including
+  skip-check builds. Never resolve npm `latest`. Optional explicit overrides must
+  be stable exact 2.x versions; install and version policy must change together.
+- Normalize CLI `opencode v2.x.y` output to bare `2.x.y` in image metadata and
+  assert it equals the build target, otherwise every startup spuriously rebuilds.
+
 - If all metadata checks match and no force flags are set, skip rebuild.
 - If any check fails, rebuild before running container.
 - Compare Playwright package versions only when the requested Playwright build is enabled; `OPENCODE_WEB_SKIP_VERSION_CHECK=1` skips npm lookup and package-version drift checks. The package version remains release-selected rather than user-configurable.

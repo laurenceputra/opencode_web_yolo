@@ -27,7 +27,11 @@ Use this matrix when authoring tests under `tests/`.
 - Startup path remains functional when `-gh` and/or `--mount-ssh` are enabled (no read-only mount ownership failures).
 - Provider state persists across restart when config/data mount contracts are present.
 - Persistence assertions verify state files are written to mounted host path, not only any in-container path.
-- Docs contract check ensures Apache stream endpoints include `/event` and `/global/event`, and excludes stale `/session/event`.
+- Docs contract check ensures Apache streams `/api/event` and websocket `/api/pty`, and excludes stale `/session/event`.
+- OpenCode 2.x acceptance must include real-image UI/assets, protected `/api/info`
+  auth, SSE, and session create/read across container recreation with host state.
+  Mocked legacy retention tests are not 2.x acceptance. Assert enabled retention
+  and custom username fail, and preferred password is derived from required legacy input.
 - Health/diagnostics command reports key prerequisites and failures clearly.
 - Startup VACUUM tests cover existing and missing databases, custom XDG data paths, mapped-user execution, the 5000 ms SQLite busy timeout, the configurable positive `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` TERM deadline bounded to `2147483647` (default 300) with fixed KILL escalation 5 seconds later, concise ordinary-failure warnings, timeout-expiry warnings containing the effective TERM deadline, and no manual WAL/SHM/journal sidecar mutation.
 - Retention accepts both flag forms, honors config/flag precedence, rejects invalid values, and propagates dry-run state.
@@ -35,6 +39,13 @@ Use this matrix when authoring tests under `tests/`.
 - Retention tests cover complete cross-directory hierarchy mapping, active descendants/unknown IDs, stale root refreshes, status changes before deletion, DELETE-true-but-still-present direct-GET verification, request timeout, supported-version gating, future markers, invalid poll intervals, exact query/cursor use, and malformed responses.
 
 ## Test Design Rules
+
+- Execute the runbook copy commands against top-level symlink roots and assert
+  trial writes cannot mutate live/backup files. Verify installed runbook availability.
+- Migration acceptance must read real pinned v1 session/message state before
+  cloning, wait on v2 migration completion and exact content/config/dummy-auth
+  assertions, recreate v2, and prove v1 restore from untouched pre-v2 state.
+- Bound browser locator/navigation waits and the overall acceptance process.
 
 - Prefer deterministic shell tests over timing-sensitive integration flows.
 - Assert exact contract strings for security-critical behavior.

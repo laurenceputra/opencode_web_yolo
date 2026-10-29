@@ -32,6 +32,8 @@ Ensure CI validates at least:
 - config/data mount contract checks for persistence behavior
 - retention flag/config validation, dry-run propagation, API mock semantics, scheduler marker persistence/retry, and process lifecycle/signal behavior
 - guard checks for version format and runtime-file/version drift
+- OpenCode 2.x real-image API/UI/browser and host-backed session recreation
+  acceptance, separately from mocked legacy retention coverage
 
 Prefer deterministic shell tests with clear failure messages.
 

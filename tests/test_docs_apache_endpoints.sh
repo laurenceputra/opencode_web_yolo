@@ -7,9 +7,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 readme="$(cat "${ROOT_DIR}/README.md")"
 
-assert_contains "$readme" "ProxyPass        /global/event"
-assert_contains "$readme" "ProxyPass        /event"
-assert_contains "$readme" "SetEnvIfNoCase Request_URI \"^/(global/event|event)\" no-gzip=1"
+assert_contains "$readme" "ProxyPass        /api/event"
+assert_contains "$readme" "ProxyPass        /api/pty ws://"
+assert_contains "$readme" "SetEnvIfNoCase Request_URI \"^/api/event\" no-gzip=1"
 assert_not_contains "$readme" "/session/event"
 
 printf '%s\n' "PASS: apache endpoint docs contract"

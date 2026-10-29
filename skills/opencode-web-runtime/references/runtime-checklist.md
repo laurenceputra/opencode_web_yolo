@@ -4,6 +4,19 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 
 ## Wrapper Behavior
 
+- Migration backups must resolve top-level config/data symlinks before `cp -a`,
+  assert independent physical directories, and separately inventory nested links.
+- Rollback must use the retained image ID with `docker run --pull=never` on restored
+  pre-v2 mounts, never a wrapper path that may rebuild or update despite skip checks.
+
+- OpenCode 2.x regression: install `@opencode/cli@2.2.1`, never `opencode-ai`
+  or unconstrained latest; use authenticated `/api/info`, SSE `/api/event`, and
+  ticketed websocket `/api/pty/:id/connect`. Public UI is not an auth bypass.
+- Copy mandatory `OPENCODE_SERVER_PASSWORD` to preferred `OPENCODE_PASSWORD` in
+  wrapper and entrypoint; reject custom usernames (only `opencode`).
+- Fail fast on any enabled retention in wrapper and entrypoint. The legacy
+  1.18.x scheduler/worker contracts below are not supported on 2.x.
+
 - Parse wrapper flags before pass-through args.
 - Keep pass-through args unchanged after `--`.
 - Gate container startup on required auth checks.
