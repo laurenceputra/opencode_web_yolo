@@ -24,6 +24,10 @@ while [ "${OPENCODE_WEB_RETENTION_DAYS#0}" != "$OPENCODE_WEB_RETENTION_DAYS" ]; 
   OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_RETENTION_DAYS#0}"
 done
 OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_RETENTION_DAYS:-0}"
+if [ "${OPENCODE_SERVER_USERNAME:-opencode}" != opencode ]; then
+  printf '%s\n' "[opencode_web_yolo] ERROR: OpenCode 2.x requires OPENCODE_SERVER_USERNAME=opencode; custom usernames are unsupported." >&2
+  exit 1
+fi
 
 case "$OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS" in
   ''|0*|*[!0-9]*)
@@ -43,6 +47,7 @@ if [ -z "${OPENCODE_SERVER_PASSWORD:-}" ]; then
   printf '%s\n' "[opencode_web_yolo] ERROR: OPENCODE_SERVER_PASSWORD must be set and non-empty." >&2
   exit 1
 fi
+export OPENCODE_PASSWORD="${OPENCODE_SERVER_PASSWORD}"
 
 runtime_user="${LOCAL_USER}"
 group_name="${LOCAL_USER}"

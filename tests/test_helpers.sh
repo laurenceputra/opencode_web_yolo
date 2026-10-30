@@ -84,7 +84,7 @@ case "\$1" in
       exit 0
     fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-version" >/dev/null 2>&1; then
-      printf '%s\n' "1.2.6"
+      printf '%s\n' "2.2.1"
       exit 0
     fi
     if printf '%s ' "\$@" | grep -F "/opt/opencode-web-yolo-node-version" >/dev/null 2>&1; then

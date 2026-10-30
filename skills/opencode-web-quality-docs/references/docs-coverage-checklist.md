@@ -9,7 +9,8 @@ Use this checklist when editing `README.md` and `TECHNICAL.md`.
 - Local-only port publish default and rationale.
 - Reverse proxy example for Nginx with required headers and websocket upgrade handling.
 - Reverse proxy example for Apache with `ProxyPass`/`ProxyPassReverse` and explicit event-stream/SSE-safe handling (timeouts, no buffering/compression on stream paths).
-- Apache stream endpoint examples must include `/event` and `/global/event`; do not document stale `/session/event`.
+- Apache stream endpoint examples must include `/api/event` and ticket-preserving
+  websocket `/api/pty`; do not document stale `/session/event`.
 - Clarify websocket settings as optional compatibility guidance, not the only streaming path.
 - TLS termination guidance at proxy layer.
 - Persistence notes for both OpenCode config and OpenCode data directories.

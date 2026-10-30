@@ -49,13 +49,18 @@ Enforce these contracts on every runtime change:
 
 # Retention lifecycle
 
-- For enabled retention, start the scheduler only after authenticated `/global/health` succeeds; forward TERM/INT, stop it with the app, and return the app status.
+Retention defaults to 0; positive days enable automatic best-effort 2.x cleanup
+without a maintenance gate. Require completed v1 migration before listing/deleting.
+
+- For enabled retention, start the scheduler only after authenticated `/api/info` succeeds; forward TERM/INT, terminate/reap worker and sleep, stop it with the app, and return the app status.
 - Run retention as the mapped user and persist its success marker under `XDG_STATE_HOME`; do not use a restart-resetting sleep schedule.
 - Use OpenCode's authenticated experimental global session listing and delete endpoint, serially, with strict response validation and fail-closed behavior. Never mutate SQLite directly.
 - Install/use `tini` as PID 1 with subreaping and process-group signal forwarding; do not remap SIGINT to TERM in the supervisor.
-- Bound every retention worker fetch, gate on a tested healthy OpenCode 1.18.x version, re-check active status before each deletion, and verify deletion disappearance before advancing state.
+- Bound every fetch, require canonical stable 2.x metadata, recheck complete hierarchy/family cutoff/migration/inboxes/active before each serial DELETE 204, and verify every observed family member is 404 before advancing state. Require root and all descendants strictly older than cutoff. Document process-local foreground/background blind spots and non-atomic TOCTOU; DELETE interrupts, not an idle guard.
 
 # Guardrails
+
+- Retention inbox scans cover only initial age-eligible families, then the accumulated current candidate family. Keep complete per-candidate hierarchy refreshes and pending-family observations; sample global activity last and reject unmapped IDs against the full hierarchy. Regress request counts and root/descendant queued/running protection.
 
 - Do not relax auth requirements for localhost usage.
 - Do not mount host credentials implicitly.

@@ -4,6 +4,19 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 
 ## Wrapper Behavior
 
+- Migration backups must resolve top-level config/data symlinks before `cp -a`,
+  assert independent physical directories, and separately inventory nested links.
+- Rollback must use the retained image ID with `docker run --pull=never` on restored
+  pre-v2 mounts, never a wrapper path that may rebuild or update despite skip checks.
+
+- OpenCode 2.x regression: install `@opencode/cli@2.2.1`, never `opencode-ai`
+  or unconstrained latest; use authenticated `/api/info`, SSE `/api/event`, and
+  ticketed websocket `/api/pty/:id/connect`. Public UI is not an auth bypass.
+- Copy mandatory `OPENCODE_SERVER_PASSWORD` to preferred `OPENCODE_PASSWORD` in
+  wrapper and entrypoint; reject custom usernames (only `opencode`).
+- Enable positive retention days (default 0) without a maintenance gate; defer
+  until `/api/experimental/migration/v1` reports completed, without a marker.
+
 - Parse wrapper flags before pass-through args.
 - Keep pass-through args unchanged after `--`.
 - Gate container startup on required auth checks.
@@ -33,9 +46,11 @@ Use this checklist for runtime changes in `.opencode_web_yolo.sh`, `.opencode_we
 - Preserve provider/auth state across restart by mounting host OpenCode data directory.
 - Keep Playwright opt-in: `OPENCODE_WEB_BUILD_PLAYWRIGHT=1` in the persistent config is durable, while `--playwright` is one-shot.
 - Retention is opt-in with non-negative `OPENCODE_WEB_RETENTION_DAYS`; its scheduler starts only after authenticated health, runs as the mapped user, and persists a success marker under `XDG_STATE_HOME`.
-- Retention must use authenticated complete `/experimental/session` pagination, `/session/status` for every involved directory, direct `/session/:id` refresh/verification, and serial `DELETE /session/:id` calls; validate compatibility and fail closed without raw SQL/WAL/SHM mutation.
+- Retention uses unfiltered `/api/session?limit=100`, data/cursor.next opaque pagination, `/api/session/active` data running map and every member's `/api/session/:id/inbox` data array. Validate all responses and fail closed without raw SQL/WAL/SHM mutation.
 - Startup VACUUM is separate from retention: retention remains an API-only, no-raw-SQL worker and must not manually touch SQLite WAL/SHM/journal sidecars.
-- Map every listed session to a root across directories; block a mapped root when status reports a busy/retrying descendant, fail closed on unmapped active IDs or malformed hierarchies, refresh/recheck immediately before each delete, verify direct 404 before marker advancement, and reject unsafe equal-timestamp page boundaries. The API has no atomic delete-if-idle guarantee.
+- Pagination race regression: retain initial candidate family IDs and accumulate new descendants across refreshes. Missing/reparented/relocated observed members abort the pass with no marker; never silently shrink a family. Directly GET every accumulated member before deletion, validate identity/linkage/location/current age, then perform final inbox/active checks. Verify deletion over the accumulated set. Non-atomic updates after checks remain a documented best-effort limitation.
+- Match published CLI pagination, not just TypeScript optional fields: 2.2.1/2.2.2 encode the empty terminal page as `{data:[],cursor:{previous:null,next:null}}`. Accept absent/null cursor fields, require nonempty strings otherwise, and retain malformed-token/loop failures. Validate against a real package as well as deterministic mocks.
+- Map every session to a root across locations; root and all descendants must be strictly older than cutoff. Running/queued descendants block the root. Reject unmapped active IDs, duplicates, missing parents, cycles and cursor loops. Refresh migration, complete hierarchy, family cutoff, inboxes and active before every serial DELETE 204; verify root and all observed descendants 404. Equal timestamps are supported by opaque cursors. No atomic guarantee: process-local foreground visibility misses background/other-process work, TOCTOU remains, and DELETE interrupts execution.
 - Validate positive worker fetch and scheduler poll timeouts; use `tini -s -g` for PID1 subreaping/group signal forwarding and preserve SIGINT semantics.
 - When enabled, resolve the current global `@playwright/test` version unless checks are skipped (then use the release fallback), run its `playwright install --with-deps chromium`, and use `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`.
 - Record installed/expected Playwright versions and rebuild when enabled-image metadata drifts.

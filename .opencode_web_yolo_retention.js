@@ -104,6 +104,12 @@ async function requestJson(route, options = {}, query = {}) {
     if (!response.ok) {
       throw new Error(`OpenCode API returned HTTP ${response.status} for ${route}`)
     }
+    if (options.noContent) {
+      if (response.status !== 204 || await response.text() !== "") {
+        throw new Error(`OpenCode API returned incompatible deletion response for ${route}`)
+      }
+      return
+    }
     const body = await response.text()
 
     try {
@@ -121,7 +127,7 @@ async function requestJson(route, options = {}, query = {}) {
 }
 
 function validateSession(session) {
-  if (!session || typeof session !== "object" || typeof session.id !== "string") {
+  if (!isObject(session) || typeof session.id !== "string" || !session.id.length) {
     throw new Error("OpenCode global session API returned a malformed session")
   }
   if (
@@ -131,8 +137,8 @@ function validateSession(session) {
   ) {
     throw new Error("OpenCode session API returned an invalid parentID")
   }
-  if (typeof session.directory !== "string" || !session.time || typeof session.time.updated !== "number") {
-    throw new Error("OpenCode global session API returned a session without directory/time.updated")
+  if (!isObject(session.location) || typeof session.location.directory !== "string" || !session.location.directory.startsWith("/") || !isObject(session.time) || typeof session.time.updated !== "number") {
+    throw new Error("OpenCode global session API returned a session without location/time.updated")
   }
   if (!Number.isSafeInteger(session.time.updated) || session.time.updated < 0) {
     throw new Error("OpenCode global session API returned an invalid time.updated")
@@ -145,26 +151,22 @@ async function listSessions() {
   const seenCursors = new Set()
 
   for (let pageNumber = 0; pageNumber < 10000; pageNumber += 1) {
-    const result = await requestJson("/experimental/session", {}, {
-      roots: "false",
-      archived: "true",
+    const result = await requestJson("/api/session", {}, {
       limit: PAGE_LIMIT,
       cursor,
     })
-    if (!Array.isArray(result.value)) {
+    if (!Array.isArray(result.value?.data) || !isObject(result.value.cursor)) {
       throw new Error("OpenCode global session API is incompatible: expected a session array")
     }
-    result.value.forEach(validateSession)
-    sessions.push(...result.value)
+    result.value.data.forEach(validateSession)
+    sessions.push(...result.value.data)
 
-    const nextCursor = result.headers.get("x-next-cursor")
-    if (!nextCursor) return sessions
-    const last = result.value[result.value.length - 1]
-    if (!last || String(last.time.updated) !== nextCursor || !/^[0-9]+$/.test(nextCursor)) {
+    const nextCursor = result.value.cursor.next
+    const previous = result.value.cursor.previous
+    if (previous !== undefined && previous !== null && (typeof previous !== "string" || !previous.length)) throw new Error("invalid previous cursor")
+    if (nextCursor === undefined || nextCursor === null) return sessions
+    if (typeof nextCursor !== "string" || !nextCursor.length || !result.value.data.length) {
       throw new Error("OpenCode global session API returned an invalid pagination cursor")
-    }
-    if (result.value.filter((session) => session.time.updated === last.time.updated).length > 1) {
-      throw new Error("OpenCode global session API cannot safely paginate equal session timestamps")
     }
     if (seenCursors.has(nextCursor) || nextCursor === cursor) {
       throw new Error("OpenCode global session API returned a repeated pagination cursor")
@@ -210,8 +212,11 @@ function buildHierarchy(sessions) {
     sessions,
     byID,
     rootByID,
-    directories: [...new Set(sessions.map((session) => session.directory))],
   }
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
 function validateStatusMap(statuses) {
@@ -219,76 +224,133 @@ function validateStatusMap(statuses) {
     throw new Error("OpenCode session status API returned an incompatible response")
   }
   for (const status of Object.values(statuses)) {
-    if (!status || !["idle", "busy", "retry"].includes(status.type)) {
+    if (!status || status.type !== "running") {
       throw new Error("OpenCode session status API returned an unknown status")
     }
   }
   return statuses
 }
 
-async function activeRoots(hierarchy) {
+async function activeRoots(hierarchy, sessions) {
   const active = new Set()
-  for (const directory of hierarchy.directories) {
-    const result = await requestJson("/session/status", {}, { directory })
-    const status = validateStatusMap(result.value)
-    for (const [sessionID, info] of Object.entries(status)) {
-      const session = hierarchy.byID.get(sessionID)
-      if (!session) {
-        throw new Error(`OpenCode session status API returned an unmapped session ${sessionID}`)
+  for (const session of sessions) {
+    const inbox = (await requestJson(`/api/session/${encodeURIComponent(session.id)}/inbox`)).value?.data
+    if (!Array.isArray(inbox)) throw new Error("OpenCode inbox API returned an incompatible response")
+    const ids = new Set()
+    for (const item of inbox) {
+      if (!isObject(item) || typeof item.id !== "string" || !item.id.length || ids.has(item.id) ||
+          item.sessionID !== session.id || !["user", "synthetic", "compaction", "move"].includes(item.type) ||
+          !["queue", "steer"].includes(item.delivery) || !isObject(item.payload) ||
+          !Number.isSafeInteger(item.time?.created) || item.time.created < 0) {
+        throw new Error("OpenCode inbox API returned malformed queued work")
       }
-      if (session.directory !== directory) {
-        throw new Error(`OpenCode session status API mapped session ${sessionID} to the wrong directory`)
-      }
-      const rootID = hierarchy.rootByID.get(sessionID)
-      if (!rootID) {
-        throw new Error(`OpenCode session hierarchy could not map session ${sessionID} to a root`)
-      }
-      if (info.type !== "busy" && info.type !== "retry") continue
-      active.add(rootID)
+      ids.add(item.id)
     }
+    if (inbox.length) active.add(hierarchy.rootByID.get(session.id))
+  }
+  // Foreground activity is sampled last to narrow (not eliminate) the race.
+  const result = await requestJson("/api/session/active")
+  const status = validateStatusMap(result.value?.data)
+  for (const sessionID of Object.keys(status)) {
+    const rootID = hierarchy.rootByID.get(sessionID)
+    if (!rootID) {
+      throw new Error(`OpenCode session status API returned an unmapped session ${sessionID}`)
+    }
+    active.add(rootID)
   }
   return active
 }
 
-async function getSession(sessionID, directory, expectNotFound = false) {
-  return requestJson(`/session/${encodeURIComponent(sessionID)}`, {
+async function getSession(sessionID, expectNotFound = false, timeoutMs) {
+  return requestJson(`/api/session/${encodeURIComponent(sessionID)}`, {
     expectNotFound,
-  }, { directory })
+    timeoutMs,
+  })
 }
 
-function validateRootResponse(result, sessionID, directory) {
+function validateSessionResponse(result, sessionID) {
   if (result.notFound) return undefined
-  validateSession(result.value)
-  if (result.value.id !== sessionID || result.value.directory !== directory) {
+  validateSession(result.value?.data)
+  if (result.value.data.id !== sessionID) {
     throw new Error(`OpenCode session API returned a mismatched session for ${sessionID}`)
   }
-  if (result.value.parentID !== undefined && result.value.parentID !== null) {
-    throw new Error(`OpenCode session API returned non-root session ${sessionID}`)
-  }
-  return result.value
+  return result.value.data
 }
 
-async function verifyDeleted(sessionID, directory, timeoutMs) {
+async function verifyDeleted(sessionID, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   while (true) {
-    const result = await getSession(sessionID, directory, true)
+    const remaining = Math.max(1, deadline - Date.now())
+    const fetchTimeout = positiveInteger("OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS", DEFAULT_FETCH_TIMEOUT_MS)
+    const result = await getSession(sessionID, true, Math.min(remaining, fetchTimeout))
     if (result.notFound) return
-    validateRootResponse(result, sessionID, directory)
+    validateSessionResponse(result, sessionID)
     if (Date.now() >= deadline) {
       throw new Error(`session ${sessionID} remained present after deletion verification`)
     }
-    await new Promise((resolve) => setTimeout(resolve, VERIFY_POLL_MS))
+    await new Promise((resolve) => setTimeout(resolve, Math.min(VERIFY_POLL_MS, Math.max(1, deadline - Date.now()))))
   }
 }
 
 async function checkServerCapability() {
-  const result = await requestJson("/global/health")
-  if (!result.value || result.value.healthy !== true || typeof result.value.version !== "string") {
-    throw new Error("OpenCode health API is incompatible; retention requires healthy 1.18.x capability metadata")
+  const result = await requestJson("/api/info")
+  if (!result.value || typeof result.value.version !== "string") {
+    throw new Error("OpenCode info API is incompatible")
   }
-  if (!/^1\.18\.[0-9]+$/.test(result.value.version)) {
-    throw new Error(`OpenCode version ${result.value.version} is unsupported; retention requires tested 1.18.x APIs`)
+  if (!/^2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(result.value.version)) {
+    throw new Error(`OpenCode version ${result.value.version} is unsupported; retention requires stable 2.x APIs`)
   }
+}
+
+async function migrationComplete() {
+  const value = (await requestJson("/api/experimental/migration/v1")).value
+  if (!isObject(value) || !["completed", "required", "running", "error"].includes(value.status)) {
+    throw new Error("OpenCode migration API returned an incompatible response")
+  }
+  if (value.status !== "completed") throw new Error("retention deferred until v1 migration is completed")
+}
+
+function family(hierarchy, rootID) {
+  return hierarchy.sessions.filter(session => hierarchy.rootByID.get(session.id) === rootID)
+}
+
+function eligible(hierarchy, rootID, cutoff) {
+  return hierarchy.rootByID.get(rootID) === rootID &&
+    family(hierarchy, rootID).every(session => BigInt(session.time.updated) < cutoff)
+}
+
+function sameLinkage(left, right) {
+  return (left.parentID ?? null) === (right.parentID ?? null) &&
+    left.location.directory === right.location.directory &&
+    left.location.workspaceID === right.location.workspaceID
+}
+
+function observeFamilies(hierarchy, observedFamilies) {
+  for (const [rootID, observed] of observedFamilies) {
+    // Pagination is not a snapshot: an updated child can move ahead of the
+    // cursor and disappear from a later traversal. Never shrink a known family.
+    for (const [id, previous] of observed) {
+      const current = hierarchy.byID.get(id)
+      if (!current || hierarchy.rootByID.get(id) !== rootID || !sameLinkage(previous, current)) {
+        throw new Error(`retention deferred: observed family member ${id} is missing or changed linkage/location`)
+      }
+    }
+    for (const member of family(hierarchy, rootID)) {
+      if (!observed.has(member.id)) observed.set(member.id, member)
+    }
+  }
+}
+
+async function refreshFamilyAges(hierarchy, observed, cutoff) {
+  let old = true
+  for (const id of observed.keys()) {
+    const current = validateSessionResponse(await getSession(id), id)
+    if (!sameLinkage(hierarchy.byID.get(id), current)) {
+      throw new Error(`retention deferred: observed family member ${id} changed linkage/location during direct refresh`)
+    }
+    if (BigInt(current.time.updated) >= cutoff) old = false
+  }
+  return old
 }
 
 async function runOnce() {
@@ -307,12 +369,16 @@ async function runOnce() {
 
   const verifyTimeoutMs = positiveInteger("OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS", DEFAULT_VERIFY_TIMEOUT_MS)
   await checkServerCapability()
+  await migrationComplete()
   const cutoff = now - days * 24n * 60n * 60n * 1000n
   const hierarchy = buildHierarchy(await listSessions())
   const candidates = hierarchy.sessions.filter(
-    (session) => (session.parentID === undefined || session.parentID === null) && BigInt(session.time.updated) < cutoff,
+    (session) => eligible(hierarchy, session.id, cutoff),
   )
-  const active = await activeRoots(hierarchy)
+  const candidateRoots = new Set(candidates.map(session => session.id))
+  const active = await activeRoots(hierarchy, hierarchy.sessions.filter(
+    session => candidateRoots.has(hierarchy.rootByID.get(session.id)),
+  ))
   const inactive = candidates.filter((session) => !active.has(session.id))
 
   if (isTrue(process.env.OPENCODE_WEB_RETENTION_DRY_RUN)) {
@@ -320,30 +386,31 @@ async function runOnce() {
     return
   }
 
+  const observedFamilies = new Map(inactive.map(session => [
+    session.id,
+    new Map(family(hierarchy, session.id).map(member => [member.id, member])),
+  ]))
   let deleted = 0
   for (const session of inactive) {
-    const refreshedResult = await getSession(session.id, session.directory, true)
-    const refreshed = validateRootResponse(refreshedResult, session.id, session.directory)
-    if (!refreshed || BigInt(refreshed.time.updated) >= cutoff) continue
-
+    await migrationComplete()
     const currentHierarchy = buildHierarchy(await listSessions())
-    const current = currentHierarchy.byID.get(session.id)
-    if (
-      !current ||
-      current.directory !== refreshed.directory ||
-      currentHierarchy.rootByID.get(session.id) !== session.id ||
-      BigInt(current.time.updated) >= cutoff
-    ) continue
-    const activeNow = await activeRoots(currentHierarchy)
-    if (activeNow.has(session.id)) continue
-
-    const result = await requestJson(`/session/${encodeURIComponent(session.id)}`, { method: "DELETE" }, {
-      directory: refreshed.directory,
-    })
-    if (result.value !== true) {
-      throw new Error(`OpenCode deletion API returned an incompatible response for session ${session.id}`)
+    observeFamilies(currentHierarchy, observedFamilies)
+    const observed = observedFamilies.get(session.id)
+    if (!eligible(currentHierarchy, session.id, cutoff) ||
+        !await refreshFamilyAges(currentHierarchy, observed, cutoff)) {
+      observedFamilies.delete(session.id)
+      continue
     }
-    await verifyDeleted(session.id, refreshed.directory, verifyTimeoutMs)
+    // Inbox and foreground activity checks must follow the direct age checks.
+    const activeNow = await activeRoots(currentHierarchy, observed.values())
+    if (activeNow.has(session.id)) {
+      observedFamilies.delete(session.id)
+      continue
+    }
+
+    await requestJson(`/api/session/${encodeURIComponent(session.id)}`, { method: "DELETE", noContent: true })
+    for (const id of observed.keys()) await verifyDeleted(id, verifyTimeoutMs)
+    observedFamilies.delete(session.id)
     deleted += 1
   }
 
