@@ -250,6 +250,10 @@ writers and preview before enabling cleanup.
 
 Only sessions are targeted; projects, accounts, provider auth, and OpenCode configuration are preserved.
 
+Inbox requests are limited to age-eligible families initially and the current
+candidate family before deletion. Complete hierarchy refreshes and global active
+checks still run per candidate; this reduces inbox traffic, not total listing cost.
+
 For a safe preview, set `OPENCODE_WEB_RETENTION_DRY_RUN=1`; previews never write the success marker. `health` and `--dry-run` show the effective retention setting and marker path.
 
 ## Instruction File Selection

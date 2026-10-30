@@ -231,9 +231,9 @@ function validateStatusMap(statuses) {
   return statuses
 }
 
-async function activeRoots(hierarchy) {
+async function activeRoots(hierarchy, sessions) {
   const active = new Set()
-  for (const session of hierarchy.sessions) {
+  for (const session of sessions) {
     const inbox = (await requestJson(`/api/session/${encodeURIComponent(session.id)}/inbox`)).value?.data
     if (!Array.isArray(inbox)) throw new Error("OpenCode inbox API returned an incompatible response")
     const ids = new Set()
@@ -375,7 +375,10 @@ async function runOnce() {
   const candidates = hierarchy.sessions.filter(
     (session) => eligible(hierarchy, session.id, cutoff),
   )
-  const active = await activeRoots(hierarchy)
+  const candidateRoots = new Set(candidates.map(session => session.id))
+  const active = await activeRoots(hierarchy, hierarchy.sessions.filter(
+    session => candidateRoots.has(hierarchy.rootByID.get(session.id)),
+  ))
   const inactive = candidates.filter((session) => !active.has(session.id))
 
   if (isTrue(process.env.OPENCODE_WEB_RETENTION_DRY_RUN)) {
@@ -399,7 +402,7 @@ async function runOnce() {
       continue
     }
     // Inbox and foreground activity checks must follow the direct age checks.
-    const activeNow = await activeRoots(currentHierarchy)
+    const activeNow = await activeRoots(currentHierarchy, observed.values())
     if (activeNow.has(session.id)) {
       observedFamilies.delete(session.id)
       continue

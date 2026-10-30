@@ -60,6 +60,8 @@ without a maintenance gate. Require completed v1 migration before listing/deleti
 
 # Guardrails
 
+- Retention inbox scans cover only initial age-eligible families, then the accumulated current candidate family. Keep complete per-candidate hierarchy refreshes and pending-family observations; sample global activity last and reject unmapped IDs against the full hierarchy. Regress request counts and root/descendant queued/running protection.
+
 - Do not relax auth requirements for localhost usage.
 - Do not mount host credentials implicitly.
 - Keep mount warnings concrete and actionable.

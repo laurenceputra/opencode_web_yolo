@@ -15,6 +15,7 @@ async function test(mode) {
   sessions[3].time.archived = 1
   if (mode === 'cursor-move') sessions = [session('root'), session('archived'), session('child', 'root')]
   if (mode === 'young') sessions[2].time.updated = cutoff
+  if (mode === 'scoped-inboxes') sessions.push(session('recent', undefined, cutoff), session('recent-child', 'recent'))
   if (mode === 'cycle') sessions[0].parentID = 'grand'
   if (mode === 'orphan') sessions[1].parentID = 'missing'
   if (mode === 'duplicate') sessions.push(sessions[0])
@@ -66,13 +67,15 @@ async function test(mode) {
       if (mode === 'empty-next') return send({ data: [], cursor: { next: 'opaque+/=' } })
       return send({ data: cursor ? sessions.slice(2) : sessions.slice(0, 2), cursor: sessions.length <= 2 || cursor && mode !== 'loop' ? {} : { next: 'opaque+/=' } })
     }
-    if (url.pathname === '/api/session/active') return send({ data: mode === 'unknown' ? { missing: { type: 'running' } } :
+    if (url.pathname === '/api/session/active') return send({ data: mode === 'unknown' || mode === 'refresh-unknown' && listings > 1 ? { missing: { type: 'running' } } :
+      mode === 'running-root' || mode === 'refresh-running-root' && listings > 1 ? { root: { type: 'running' } } :
       mode === 'running' || mode === 'refresh-running' && listings > 1 ? { grand: { type: 'running' } } : mode === 'bad-active' ? [] : {} })
     const match = url.pathname.match(/^\/api\/session\/([^/]+)(\/inbox)?$/)
     if (!match) { res.statusCode = 500; return res.end() }
     const id = match[1]
     if (match[2]) return send({ data: mode === 'bad-inbox' ? {} : mode === 'wrong-inbox' ? [{ id: 'input', sessionID: 'wrong', type: 'synthetic', payload: {}, delivery: 'queue', time: { created: 1 } }] :
-      (mode === 'queued' || mode === 'refresh-queued' && listings > 1) && id === 'grand' ?
+      ((mode === 'queued' || mode === 'refresh-queued' && listings > 1) && id === 'grand' ||
+        (mode === 'queued-root' || mode === 'refresh-queued-root' && listings > 1) && id === 'root') ?
         [{ id: 'input', sessionID: id, type: 'synthetic', payload: { text: 'work' }, delivery: 'queue', time: { created: 1 } }] : [] })
     if (req.method === 'DELETE') {
       deletes.push(id)
@@ -116,10 +119,11 @@ async function test(mode) {
     } else {
       const result = await run()
       const failed = ['bad-previous', 'empty-previous', 'empty-cursor', 'cursor-move', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'cycle', 'orphan', 'duplicate', 'malformed', 'loop', 'bad-cursor', 'no-cursor', 'bad-page', 'empty-next', 'unknown', 'bad-active', 'bad-inbox', 'wrong-inbox', 'unsupported', 'timeout', 'still-present', 'child-present', 'bad-delete'].includes(mode) || mode.startsWith('migration-')
-      assert.equal(result.code, failed ? 1 : 0, `${mode}: ${result.output}`)
-      assert.equal(fs.existsSync(marker), !failed, `${mode}: marker`)
-      if (!failed) {
-        const preserved = ['direct-young', 'young', 'queued', 'running', 'refresh-young', 'refresh-running', 'refresh-queued'].includes(mode)
+      const shouldFail = failed || mode === 'refresh-unknown'
+      assert.equal(result.code, shouldFail ? 1 : 0, `${mode}: ${result.output}`)
+      assert.equal(fs.existsSync(marker), !shouldFail, `${mode}: marker`)
+      if (!shouldFail) {
+        const preserved = ['direct-young', 'young', 'queued', 'running', 'refresh-young', 'refresh-running', 'refresh-queued', 'queued-root', 'running-root', 'refresh-queued-root', 'refresh-running-root'].includes(mode)
         assert.deepEqual(deletes, preserved ? ['archived'] : ['root', 'archived'], mode)
         if (mode === 'normal' || mode === 'added-descendant') {
           const deletion = requests.indexOf('DELETE /api/session/root')
@@ -129,6 +133,14 @@ async function test(mode) {
           assert.ok(direct > 0 && direct < inbox && inbox < active && active < deletion, 'direct ages precede final inbox/active checks')
         }
         if (mode === 'added-descendant') assert.equal(requests.filter(r => r === 'GET /api/session/extra').length, 2, 'new descendant directly refreshed and verified deleted')
+        if (mode === 'scoped-inboxes') {
+          for (const id of ['root', 'child', 'grand', 'archived']) {
+            assert.equal(requests.filter(r => r === `GET /api/session/${id}/inbox`).length, 2, `${id}: initial and own candidate scan only`)
+          }
+          for (const id of ['recent', 'recent-child']) assert.equal(requests.filter(r => r === `GET /api/session/${id}/inbox`).length, 0, 'recent family inboxes never fetched')
+          assert.equal(listings, 3, 'complete global listing retained per candidate')
+          assert.equal(requests.filter(r => r === 'GET /api/session/active').length, 3, 'global active map retained per candidate')
+        }
         const before = listings
         assert.equal((await run()).code, 0)
         assert.equal(listings, before, 'weekly marker avoids API work')
@@ -145,6 +157,7 @@ async function test(mode) {
 }
 ;(async () => {
   for (const mode of ['normal', 'real-cursors', 'null-cursors', 'bad-previous', 'empty-previous', 'empty-cursor', 'added-descendant', 'cursor-move', 'direct-young', 'direct-parent', 'direct-location', 'direct-identity', 'direct-missing', 'terminal-extra', 'preview', 'young', 'queued', 'running', 'refresh-young', 'refresh-running', 'refresh-queued',
+    'scoped-inboxes', 'queued-root', 'running-root', 'refresh-queued-root', 'refresh-running-root', 'refresh-unknown',
     'cycle', 'orphan', 'duplicate', 'malformed', 'loop', 'bad-cursor', 'no-cursor', 'bad-page', 'empty-next', 'unknown', 'bad-active', 'bad-inbox', 'wrong-inbox', 'unsupported', 'timeout',
     'migration-required', 'migration-running', 'migration-error', 'migration-change', 'still-present', 'child-present', 'bad-delete']) await test(mode)
   console.log('PASS: deterministic v2 API retention scenarios')
