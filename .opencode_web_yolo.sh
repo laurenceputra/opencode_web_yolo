@@ -23,8 +23,7 @@ fi
 
 VERBOSE="${OPENCODE_WEB_VERBOSE}"
 PLAYWRIGHT_DEFAULT_VERSION="1.62.1"
-OPENCODE_PACKAGE="@opencode/cli"
-OPENCODE_DEFAULT_VERSION="2.2.1"
+OPENCODE_PACKAGE="opencode-ai"
 
 is_true() {
   case "${1:-0}" in
@@ -497,7 +496,7 @@ Wrapper flags:
   --no-pull              Skip default pull-on-start behavior for this run.
   --playwright           Build runtime image with Playwright Chromium.
   --wrangler             Build Wrangler and mount host Wrangler config read-write.
-  --retention-days N     Automatically delete old inactive session families (0 disables).
+  --retention-days N     Delete inactive root sessions older than N days (0 disables).
   --retention-days=N     Same as above, using an equals-form value.
   --agents-file PATH     Mount a host AGENTS.md file read-only.
   --no-host-agents       Skip mounting host AGENTS.md.
@@ -516,7 +515,7 @@ Wrapper flags:
 
 Required auth:
   OPENCODE_SERVER_PASSWORD must be set and non-empty on all runs.
-  OPENCODE_SERVER_USERNAME must be opencode (fixed by OpenCode 2.x).
+  Optional: OPENCODE_SERVER_USERNAME (default: opencode)
 
 Lifecycle defaults:
   Container name: ${OPENCODE_WEB_CONTAINER_NAME}
@@ -578,7 +577,7 @@ write_default_config() {
 # export OPENCODE_WEB_DATA_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/opencode
 # export OPENCODE_WEB_BUILD_PLAYWRIGHT=1
 # export OPENCODE_WEB_BUILD_WRANGLER=1
-# export OPENCODE_WEB_RETENTION_DAYS=0 # Automatic best-effort age-based cleanup; 0 disables.
+# export OPENCODE_WEB_RETENTION_DAYS=30
 # Advanced persistent overrides:
 # export OPENCODE_WEB_SKIP_UPDATE_CHECK=1
 # export OPENCODE_WEB_YOLO_REPO=laurenceputra/opencode_web_yolo
@@ -627,10 +626,7 @@ show_health() {
   printf '%s\n' "  retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
   printf '%s\n' "  retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
   printf '%s\n' "  retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
-  printf '%s\n' "  retention_schedule=weekly-after-success"
-  printf '%s\n' "  api_readiness=/api/info (authenticated; version field)"
-  printf '%s\n' "  opencode_package=${OPENCODE_PACKAGE}"
-  printf '%s\n' "  opencode_default_version=${OPENCODE_DEFAULT_VERSION}"
+  printf '%s\n' "  retention_schedule=after-health-at-most-weekly"
   printf '%s\n' "  retention_marker=${runtime_xdg_state}/session-retention.last-success"
   printf '%s\n' "  runtime_env_home=${runtime_home}"
   printf '%s\n' "  runtime_env_xdg_config_home=${runtime_xdg_config}"
@@ -714,26 +710,22 @@ show_health() {
 }
 
 resolve_expected_opencode_version() {
-  local resolved_version
-  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
-    printf '%s\n' "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
-    return 0
-  fi
   if is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}"; then
     debug "Skipping OpenCode npm version check."
     return 0
   fi
 
-  if command -v npm >/dev/null 2>&1 && resolved_version="$(npm view @opencode/cli version 2>/dev/null)"; then
-    opencode_version_is_compatible "$resolved_version" || die "Registry returned unsupported or malformed @opencode/cli version: '${resolved_version}'. Expected exact stable 2.x."
-    printf '%s\n' "$resolved_version"
-  else
-    warn "Unable to resolve @opencode/cli; retaining compatible image version, or using tested baseline ${OPENCODE_DEFAULT_VERSION} for a fresh/incompatible image."
+  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
+    printf '%s\n' "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}"
+    return 0
   fi
-}
 
-opencode_version_is_compatible() {
-  [[ "$1" =~ ^2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "npm is not available; cannot evaluate OpenCode version drift."
+    return 0
+  fi
+
+  npm view "${OPENCODE_PACKAGE}" version --json 2>/dev/null | tr -d '"' | tr -d '[:space:]'
 }
 
 resolve_expected_playwright_version() {
@@ -766,7 +758,7 @@ build_image() {
   local -a build_cmd
 
   requested_opencode_version="${1:-}"
-  build_opencode_version="${OPENCODE_DEFAULT_VERSION}"
+  build_opencode_version="latest"
   if [ -n "$requested_opencode_version" ]; then
     build_opencode_version="$requested_opencode_version"
   elif [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
@@ -805,7 +797,7 @@ ensure_image() {
 
   reasons=()
   compatibility_rebuild_requires_pull=0
-  expected_opencode_version="$(resolve_expected_opencode_version)" || die "Cannot select a safe OpenCode version."
+  expected_opencode_version="$(resolve_expected_opencode_version || true)"
   expected_playwright_version="$(resolve_expected_playwright_version || true)"
 
   if ! docker image inspect "${OPENCODE_WEB_YOLO_IMAGE}" >/dev/null 2>&1; then
@@ -829,10 +821,7 @@ ensure_image() {
     fi
 
     image_opencode_version="$(docker run --rm --entrypoint cat "${OPENCODE_WEB_YOLO_IMAGE}" /opt/opencode-version 2>/dev/null || true)"
-    if [ -z "$expected_opencode_version" ] && opencode_version_is_compatible "$image_opencode_version"; then
-      expected_opencode_version="$image_opencode_version"
-    fi
-    if ! opencode_version_is_compatible "$image_opencode_version" || { ! is_true "${OPENCODE_WEB_SKIP_VERSION_CHECK}" && [ -n "$expected_opencode_version" ] && [ "$image_opencode_version" != "$expected_opencode_version" ]; }; then
+    if [ -n "$expected_opencode_version" ] && [ "$image_opencode_version" != "$expected_opencode_version" ]; then
       reasons+=("OpenCode version mismatch (image='${image_opencode_version:-missing}', expected='${expected_opencode_version}')")
     fi
 
@@ -1096,12 +1085,6 @@ main() {
   fi
 
   require_password
-  [ "${OPENCODE_SERVER_USERNAME}" = opencode ] || die "OpenCode 2.x requires OPENCODE_SERVER_USERNAME=opencode; custom usernames are unsupported."
-  if [ -n "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION:-}" ]; then
-    opencode_version_is_compatible "${OPENCODE_WEB_EXPECTED_OPENCODE_VERSION}" || die "OPENCODE_WEB_EXPECTED_OPENCODE_VERSION must be an exact stable 2.x version."
-  fi
-  OPENCODE_PASSWORD="${OPENCODE_SERVER_PASSWORD}"
-  export OPENCODE_PASSWORD
   export OPENCODE_SERVER_PASSWORD
   require_command docker
   docker info >/dev/null 2>&1 || die "Docker daemon is not available."
@@ -1127,7 +1110,6 @@ main() {
     -e "OPENCODE_WEB_YOLO_CLEANUP=${OPENCODE_WEB_YOLO_CLEANUP}"
     -e "OPENCODE_WEB_YOLO_HOME=${OPENCODE_WEB_YOLO_HOME}"
     -e OPENCODE_SERVER_PASSWORD
-    -e OPENCODE_PASSWORD
     -e "OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME}"
     -e "OPENCODE_WEB_PORT=${OPENCODE_WEB_PORT}"
     -e "OPENCODE_WEB_RETENTION_DAYS=${OPENCODE_WEB_RETENTION_DAYS}"
@@ -1250,7 +1232,7 @@ main() {
     printf '%s\n' "retention_poll_seconds=${OPENCODE_WEB_RETENTION_POLL_SECONDS}"
     printf '%s\n' "retention_fetch_timeout_ms=${OPENCODE_WEB_RETENTION_FETCH_TIMEOUT_MS}"
     printf '%s\n' "retention_verify_timeout_ms=${OPENCODE_WEB_RETENTION_VERIFY_TIMEOUT_MS}"
-    printf '%s\n' "retention_schedule=weekly-after-success"
+    printf '%s\n' "retention_schedule=after-health-at-most-weekly"
     printf '%s\n' "retention_marker=${runtime_xdg_state}/session-retention.last-success"
     printf '%s\n' "opencode_config_dir=${OPENCODE_WEB_CONFIG_DIR}"
     printf '%s\n' "opencode_data_dir=${OPENCODE_WEB_DATA_DIR}"

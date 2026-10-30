@@ -18,7 +18,6 @@ fixed_sudoers_path=/etc/sudoers.d/90-opencode-web-yolo
 assert_contains "$entrypoint_source" "$fixed_sudoers_path"
 # Keep production's fixed root-owned path; redirect only this temporary test copy.
 entrypoint_source="${entrypoint_source//"${fixed_sudoers_path}"/"${TMP_DIR}/sudoers"}"
-entrypoint_source="${entrypoint_source//\/usr\/local\/bin\/opencode_web_yolo_runtime.sh/${ROOT_DIR}/.opencode_web_yolo_runtime.sh}"
 printf '%s\n' "$entrypoint_source" >"$ENTRYPOINT_COPY"
 chmod +x "$ENTRYPOINT_COPY"
 
@@ -96,7 +95,7 @@ run_entrypoint() {
     XDG_CONFIG_HOME="${home}/config" \
     XDG_DATA_HOME="$data_home" \
     XDG_STATE_HOME="${data_home}/opencode/state" \
-    OPENCODE_WEB_RETENTION_DAYS="${OPENCODE_WEB_TEST_RETENTION_DAYS:-0}" \
+    OPENCODE_WEB_RETENTION_DAYS=0 \
     OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS="${OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS-300}" \
     "$ENTRYPOINT_COPY" "$@"
 }
@@ -106,21 +105,10 @@ existing_data="${TMP_DIR}/custom-xdg-data"
 existing_db="${existing_data}/opencode/opencode.db"
 mkdir -p "$(dirname "$existing_db")"
 : >"$existing_db"
-set +e
-# shellcheck disable=SC2016 # Expand passwords in the inner shell after entrypoint normalization, not in this test shell.
-existing_output="$(OPENCODE_PASSWORD=conflicting run_entrypoint "$existing_home" "$existing_data" sh -c 'test "$OPENCODE_PASSWORD" = "$OPENCODE_SERVER_PASSWORD"' 2>&1)"
-normalization_status=$?
-set -e
-assert_equals 0 "$normalization_status"
+existing_output="$(run_entrypoint "$existing_home" "$existing_data" true 2>&1)"
 assert_contains "$existing_output" "VACUUM: compacting OpenCode database at ${existing_db}"
 assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=timeout --kill-after=5 300 sqlite3 -cmd .timeout 5000 ${existing_db} VACUUM;"
 assert_contains "$(cat "$SQLITE_LOG")" "-cmd .timeout 5000 ${existing_db} VACUUM;"
-
-# Positive days must reach the mapped-user supervisor with persistent HOME/XDG.
-# shellcheck disable=SC2016
-OPENCODE_WEB_TEST_RETENTION_DAYS=7 run_entrypoint "$existing_home" "$existing_data" sh -c \
-  'test "$OPENCODE_WEB_RETENTION_DAYS" = 7 && test "$HOME" = "$OPENCODE_WEB_YOLO_HOME" && test "$XDG_STATE_HOME" = "$XDG_DATA_HOME/opencode/state"'
-assert_contains "$(cat "$GOSU_LOG")" "user=${LOCAL_USER} command=${ROOT_DIR}/.opencode_web_yolo_runtime.sh"
 
 custom_home="${TMP_DIR}/custom-timeout-home"
 custom_data="${TMP_DIR}/custom-timeout-data"

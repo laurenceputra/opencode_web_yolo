@@ -24,9 +24,8 @@ RUN apt-get update \
     tini \
   && rm -rf /var/lib/apt/lists/*
 
-ARG OPENCODE_VERSION=2.2.1
-RUN node -e 'const v = process.argv[1]; const m = v.match(/^2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/); if (!m || m[0] !== v) process.exit(1)' "${OPENCODE_VERSION}" \
-    && npm install -g "@opencode/cli@${OPENCODE_VERSION}"
+ARG OPENCODE_VERSION=latest
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
 ARG OPENCODE_WEB_BUILD_PLAYWRIGHT=0
 ARG PLAYWRIGHT_VERSION=1.62.1
@@ -51,8 +50,7 @@ RUN mkdir -p /opt /workspace "${OPENCODE_WEB_YOLO_HOME}" /app \
   && node_major="${node_major%%.*}" \
   && printf '%s\n' "${node_version}" >/opt/opencode-web-yolo-node-version \
   && printf '%s\n' "${node_major}" >/opt/opencode-web-yolo-node-major \
-  && opencode_version="$(opencode --version)" \
-  && node -e 'const m = process.argv[1].trim().match(/^(?:opencode v)?(2\.[0-9]+\.[0-9]+)$/); if (!m || m[1] !== process.argv[2]) process.exit(1); process.stdout.write(m[1])' "${opencode_version}" "${OPENCODE_VERSION}" >/opt/opencode-version \
+  && opencode --version | tr -d '[:space:]' >/opt/opencode-version \
   && printf '%s\n' "${WRAPPER_VERSION}" >/opt/opencode-web-yolo-version \
   && printf '%s\n' "${OPENCODE_WEB_BUILD_PLAYWRIGHT}" >/opt/opencode-web-yolo-playwright \
   && printf '%s\n' "${PLAYWRIGHT_VERSION}" >/opt/opencode-web-yolo-playwright-expected-version \

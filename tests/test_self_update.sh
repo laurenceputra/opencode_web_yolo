@@ -40,9 +40,6 @@ for production_file in "${ROOT_DIR}/.opencode_web_yolo.sh" "${ROOT_DIR}/install.
     fail "${production_file} contains a Bash 4-only construct"
   fi
 done
-if grep -F '/' "${ROOT_DIR}/.opencode_web_yolo.manifest" >/dev/null; then
-  fail "managed release assets must stay flat for the released 0.5.0 updater"
-fi
 
 export PATH="${FAKE_BIN}:${PATH}"
 export HOME="${HOME_DIR}"
@@ -295,32 +292,6 @@ if [ "$status" -eq 0 ]; then
 fi
 assert_contains "$output_duplicate" "missing, empty, or contains invalid managed files"
 assert_equals "${LOCAL_VERSION}" "$(tr -d '[:space:]' <"${INSTALL_HOME}/VERSION")"
-
-# Exercise the real released validator, not today's wrapper with a lowered VERSION.
-# CI checks out full history so this immutable production snapshot is available.
-baseline_ref=a95a84c349c67f4662913a1efb35519654e733ec
-rm -rf "${INSTALL_HOME}"
-mkdir -p "${INSTALL_HOME}"
-git -C "$ROOT_DIR" show "${baseline_ref}:.opencode_web_yolo.manifest" >"${TMP_DIR}/baseline-manifest"
-while IFS= read -r baseline_file; do
-  git -C "$ROOT_DIR" show "${baseline_ref}:${baseline_file}" >"${INSTALL_HOME}/${baseline_file}"
-done <"${TMP_DIR}/baseline-manifest"
-chmod +x "${INSTALL_HOME}/.opencode_web_yolo.sh"
-assert_equals "0.5.0" "$(tr -d '[:space:]' <"${INSTALL_HOME}/VERSION")"
-assert_equals "$(git -C "$ROOT_DIR" rev-parse "${baseline_ref}:.opencode_web_yolo.sh")" \
-  "$(git hash-object "${INSTALL_HOME}/.opencode_web_yolo.sh")"
-prepare_remote_release "${LOCAL_VERSION}" "actual-0.5.0-upgrade"
-rm -f "${CURL_LOG}"
-output_baseline="$("${INSTALL_HOME}/.opencode_web_yolo.sh" --dry-run 2>&1)"
-assert_contains "$output_baseline" "Updating wrapper from 0.5.0 to ${LOCAL_VERSION}."
-assert_contains "$output_baseline" "Update complete, re-executing wrapper."
-assert_contains "$output_baseline" "DRY RUN"
-assert_equals "${LOCAL_VERSION}" "$(tr -d '[:space:]' <"${INSTALL_HOME}/VERSION")"
-assert_equals "$(git hash-object "${ROOT_DIR}/.opencode_web_yolo.sh")" \
-  "$(git hash-object "${INSTALL_HOME}/.opencode_web_yolo.sh")"
-assert_equals "$(git hash-object "${ROOT_DIR}/OPENCODE_2_MIGRATION.md")" \
-  "$(git hash-object "${INSTALL_HOME}/OPENCODE_2_MIGRATION.md")"
-assert_contains "$(cat "${CURL_LOG}")" "/archive/refs/heads/main.tar.gz"
 
 create_old_install_home
 prepare_remote_release "${CURRENT_RELEASE_VERSION}" "old-wrapper-repair"

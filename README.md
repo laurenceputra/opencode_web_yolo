@@ -157,26 +157,6 @@ Truthy toggle values such as `true`, `yes`, and `on` are accepted and normalized
 
 ## Persistence Paths
 
-### OpenCode 2.x upgrade
-
-The wrapper resolves scoped `@opencode/cli` once per startup and automatically
-adopts stable canonical exact 2.x releases, still launched with `opencode serve`.
-Successful malformed or unsupported (including 3.x) registry results fail before
-build or container replacement. `OPENCODE_WEB_EXPECTED_OPENCODE_VERSION=2.2.1`
-pins an exact stable 2.x target without a registry lookup. During registry outages,
-valid exact 2.x image metadata is retained even for unrelated rebuilds; fresh or
-incompatible images use release-tested baseline 2.2.1 with a warning. Skipped version
-checks also preserve compatible image versions on rebuild, with explicit pins
-controlling builds. Direct Docker builds default to pinned baseline 2.2.1.
-CI tests both that baseline and current stable 2.x, not every historical release.
-Back up before upgrades: compatibility testing cannot guarantee rollback of
-migrated data; restore pre-upgrade state rather than downgrade mutated data.
-Read the [backup/copy/restore migration runbook](OPENCODE_2_MIGRATION.md)
-**before** starting 2.x against existing data. Histories migrate in the background.
-Keep the wrapper's mandatory `OPENCODE_SERVER_PASSWORD`; it is forwarded as both
-legacy and preferred `OPENCODE_PASSWORD`. Username must be `opencode`.
-The public UI shell serves sign-in; protected APIs use `/api` (diagnostic `/api/info`).
-
 - Wrapper config file: `~/.opencode_web_yolo/config`
 - OpenCode config mount: `~/.config/opencode`
 - OpenCode data/state mount: `~/.local/share/opencode`
@@ -201,10 +181,6 @@ sidecars.
 
 ## Weekly session retention
 
-Disabled by default (`OPENCODE_WEB_RETENTION_DAYS=0`). A positive value enables
-automatic, best-effort age-based cleanup on stable OpenCode 2.x; no maintenance
-window or idle-server gate is required. Back up important history first.
-
 Enable retention in the generated config, or override it for one invocation:
 
 ```bash
@@ -213,46 +189,14 @@ opencode_web_yolo
 opencode_web_yolo --retention-days=14
 ```
 
-The container starts OpenCode first, waits for authenticated `/api/info`, and then runs a lightweight scheduler as the mapped runtime user. The first enabled run is due immediately; later runs use the success marker at `$XDG_STATE_HOME/session-retention.last-success` and are no more frequent than once every seven days. Stopped containers do not lose schedule state, and failed runs do not advance the marker. The image uses `tini -s -g` as PID 1 for subreaping and signal-group forwarding.
+The container starts OpenCode first, waits for authenticated `/global/health`, and then runs a lightweight scheduler as the mapped runtime user. The first enabled run is due immediately; later runs use the success marker at `$XDG_STATE_HOME/session-retention.last-success` and are no more frequent than once every seven days. Stopped containers do not lose schedule state, and failed runs do not advance the marker. The image uses `tini -s -g` as PID 1 for subreaping and signal-group forwarding.
 
-Cleanup requires stable 2.x `/api/info` metadata and completed
-`/api/experimental/migration/v1`; required/running/error migration defers cleanup
-without advancing the marker. `/api/session?limit=100` is intentionally unfiltered:
-both archive states, all locations and all hierarchy levels are included. The
-worker follows opaque `cursor.next` values to a terminal page, validates the
-cursor fields as absent/null or nonempty strings (published 2.2.1/2.2.2 use null
-for both cursors on the empty terminal page), checks the
-complete hierarchy, and fails closed on malformed responses, duplicate IDs,
-missing parents, cycles or cursor loops. A root **and every descendant** must have
-`time.updated` strictly older than the cutoff; a recent child protects the family.
-Observed `/api/session/active` running work or any member's nonempty
-`/api/session/:id/inbox` protects the whole family, including queued/steering
-user, synthetic, compaction and move inputs. Before each serial delete the worker
-refreshes migration, the entire hierarchy, family ages, inboxes and active map.
-It retains the initial family IDs and accumulates newly observed descendants:
-if any known member disappears from a refreshed listing or changes parent linkage
-or location, the pass defers without advancing the marker. This protects against
-an updated child moving ahead of a pagination cursor. Each accumulated member is
-also fetched directly to validate identity, linkage, location and current age
-before the final inbox/activity checks; a directly refreshed recent member
-preserves its family.
-`DELETE /api/session/:id` must return 204, then direct GETs must confirm 404 for
-the root and all observed descendants within bounded waits. OpenCode owns
-recursive cleanup; retention never edits SQLite or removes WAL/SHM files.
-Failures retry later; logs never include titles or session content.
+Cleanup first requires a healthy OpenCode `1.18.x` server, then uses OpenCode 1.18.25's experimental complete global listing (`/experimental/session` with `roots=false` and `archived=true`) and safely maps every listed session to its root across directories. It checks `/session/status` for every involved directory; any busy/retrying descendant or unmapped active ID fails closed, and the affected root is skipped. Before each delete it directly refreshes the root through `GET /session/:id?directory=...`, confirms it is still an old root, reloads the hierarchy, and re-checks activity. Deletes remain serial through `DELETE /session/:id?directory=...`; each successful delete is verified by polling the direct GET until it returns 404/not-found. This lets OpenCode recursively remove children, messages, parts, and events. It never edits SQLite directly or removes WAL/SHM files. An incompatible, unsupported, stalled, or failed API response fails closed and is retried later. Session IDs may be logged for diagnostics, but titles and content are not.
 
-**Not an atomic safety guarantee:** the active map covers only process-local
-foreground drains, not all background tools or other server processes. The
-refresh-to-delete TOCTOU window remains: new activity/children may arrive after
-checks (including updates after direct member refreshes), and DELETE recursively interrupts execution rather than refusing busy
-sessions. Use `0` if these best-effort limits are unacceptable; avoid shared
-writers and preview before enabling cleanup.
+The API has no atomic delete-if-idle operation, so a residual status-to-delete race cannot be eliminated completely. The wrapper's direct refresh and immediate activity/hierarchy recheck narrow that window; OpenCode's own authenticated deletion/cancellation behavior is the final guard, and any failed or uncertain run is retried later.
 
+The global API's cursor contains only `time.updated`; when a full page ends with duplicate timestamps, the worker refuses to delete rather than risk skipping sessions at that boundary. Equal timestamps without this detectable page-boundary pattern remain an upstream limitation of the experimental cursor API.
 Only sessions are targeted; projects, accounts, provider auth, and OpenCode configuration are preserved.
-
-Inbox requests are limited to age-eligible families initially and the current
-candidate family before deletion. Complete hierarchy refreshes and global active
-checks still run per candidate; this reduces inbox traffic, not total listing cost.
 
 For a safe preview, set `OPENCODE_WEB_RETENTION_DRY_RUN=1`; previews never write the success marker. `health` and `--dry-run` show the effective retention setting and marker path.
 
@@ -304,10 +248,10 @@ export OPENCODE_SERVER_PASSWORD='change-me-now'
 mkdir -p "$HOME/.config/opencode" "$HOME/.local/share/opencode" && (docker rm -f opencode_web_yolo >/dev/null 2>&1 || true) && docker run -d --name opencode_web_yolo --restart unless-stopped -p 127.0.0.1:4096:4096 -e LOCAL_UID="$(id -u)" -e LOCAL_GID="$(id -g)" -e LOCAL_USER="$(id -un)" -e OPENCODE_SERVER_PASSWORD -e HOME=/home/opencode -e XDG_CONFIG_HOME=/home/opencode/.config -e XDG_DATA_HOME=/home/opencode/.local/share -e XDG_STATE_HOME=/home/opencode/.local/share/opencode/state -v "$PWD:/workspace" -v "$HOME/.config/opencode:/home/opencode/.config/opencode" -v "$HOME/.local/share/opencode:/home/opencode/.local/share/opencode" opencode_web_yolo:latest opencode serve --hostname 0.0.0.0 --port 4096
 ```
 
-Force-refresh image to the tested OpenCode release and current Playwright version:
+Force-refresh image to the resolved latest OpenCode and Playwright versions:
 
 ```bash
-OPENCODE_VERSION=2.2.1 # @opencode/cli, not the old opencode-ai release line
+OPENCODE_VERSION="$(npm view opencode-ai version)"
 PLAYWRIGHT_VERSION="$(npm view @playwright/test version)"
 docker build --pull --build-arg WRAPPER_VERSION="$(cat VERSION)" --build-arg OPENCODE_VERSION="${OPENCODE_VERSION}" --build-arg OPENCODE_WEB_BUILD_PLAYWRIGHT=1 --build-arg PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" -t opencode_web_yolo:latest -f .opencode_web_yolo.Dockerfile .
 ```
@@ -336,10 +280,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_buffering off;
-        proxy_cache off;
-        gzip off;
-        proxy_read_timeout 600s;
     }
 }
 ```
@@ -362,14 +302,16 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
     # Stream endpoints: keep long-lived SSE responses unbuffered/uncompressed.
     ProxyTimeout 600
     SetEnv proxy-sendchunked 1
-    SetEnvIfNoCase Request_URI "^/api/event" no-gzip=1
+    SetEnvIfNoCase Request_URI "^/(global/event|event)" no-gzip=1
 
-    ProxyPass        /api/event http://127.0.0.1:4096/api/event timeout=600 retry=0
-    ProxyPassReverse /api/event http://127.0.0.1:4096/api/event
+    ProxyPass        /global/event  http://127.0.0.1:4096/global/event  timeout=600 retry=0
+    ProxyPassReverse /global/event  http://127.0.0.1:4096/global/event
+    ProxyPass        /event http://127.0.0.1:4096/event timeout=600 retry=0
+    ProxyPassReverse /event http://127.0.0.1:4096/event
 
     # Terminal PTY endpoint uses websocket upgrades.
-    ProxyPass        /api/pty ws://127.0.0.1:4096/api/pty retry=0
-    ProxyPassReverse /api/pty ws://127.0.0.1:4096/api/pty
+    ProxyPass        /pty ws://127.0.0.1:4096/pty retry=0
+    ProxyPassReverse /pty ws://127.0.0.1:4096/pty
 
     ProxyPass        / http://127.0.0.1:4096/ timeout=120 retry=0
     ProxyPassReverse / http://127.0.0.1:4096/
@@ -410,7 +352,7 @@ Enable modules: `proxy`, `proxy_http`, `proxy_wstunnel`, `headers`, `ssl`, `defl
 - Run `opencode_web_yolo health` for Docker/image/auth diagnostics.
 - Use `OPENCODE_WEB_DRY_RUN=1` or `--dry-run` to verify port bind, env, and mount behavior.
 - Use `--verbose` for extra wrapper logs.
-- If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/api/pty/:id/connect` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules). Preserve the query string containing the upstream-issued ticket; do not log tickets.
+- If terminal open/connect fails with `502 Bad Gateway` or `NS_ERROR_WEBSOCKET_CONNECTION_REFUSED`, verify proxy websocket routing for `/pty` (Apache requires `proxy_wstunnel` and `ws://` `ProxyPass` rules).
 - If browser output stalls behind Apache, verify SSE paths are proxied with longer timeouts and `no-gzip=1`.
 - Workspace UI state (for example expanded workspaces and last-open session shortcut) is stored in browser localStorage by OpenCode Web, so it is not shared across different browsers/profiles.
 - Session/project data still persists server-side in `~/.local/share/opencode/opencode.db`; use explicit session URLs (for example `/<workspace>/session/<id>`) when switching browsers.

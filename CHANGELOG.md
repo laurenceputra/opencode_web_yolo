@@ -2,38 +2,6 @@
 
 All notable changes to this project are documented here.
 
-## 0.6.0 - Unreleased
-
-- Accept explicit null pagination cursor fields returned by published OpenCode
-  2.2.1/2.2.2 terminal pages while still rejecting empty/malformed tokens. Add
-  matching deterministic fixtures and a local-CLI mode for the isolated real
-  deletion acceptance harness, alongside the existing Docker CI lanes.
-- Retain and accumulate observed retention family IDs across pagination refreshes;
-  defer without a marker if a known member disappears or changes linkage/location.
-  Directly recheck every member's identity/linkage/location/age before final
-  inbox/activity checks, and verify deletion against the accumulated family.
-  Add deterministic moving-cursor and direct-refresh regressions; cleanup remains
-  best-effort rather than atomic.
-- Ship the migration runbook with installed assets; isolate symlinked backup roots
-  and use verified retained image IDs for rollback without pulls/builds/updates.
-- Add real pinned v1 transcript/config/dummy-auth migration and restore acceptance,
-  plus bounded browser navigation and overall deadlines.
-
-- Migrate to scoped `@opencode/cli`: automatically resolve exact stable 2.x once,
-  with explicit pins taking precedence. Registry outages retain compatible image
-  versions even on rebuild; fresh/incompatible images use tested baseline 2.2.1.
-  Keep Node 22 and persistent config/data roots; reject malformed/3.x registry results.
-- Forward required wrapper password as preferred `OPENCODE_PASSWORD`, reject custom
-  usernames. Retention is ported to stable 2.x APIs: default disabled, automatic
-  best-effort family-age cleanup with migration deferral, running/queued checks,
-  opaque pagination, serial DELETE 204 and root/descendant 404 verification.
-  Recent descendants protect their families. Persistent weekly markers and
-  preview remain; activity checks have documented background/TOCTOU limits,
-  not an atomic guarantee. Add deterministic v2 mocks and baseline/latest
-  real-image deletion/persistence acceptance.
-- Update proxy/API guidance and real-image CI for v2 UI/assets, auth, SSE and
-  persistent session recreation. Add copy-first migration/backup/restore runbook.
-
 ## [0.5.0] - 2026-09-20
 
 - Added persistent `OPENCODE_WEB_STARTUP_VACUUM_TERM_TIMEOUT_SECONDS` configuration, defaulting to 300 seconds, with bounded positive-integer validation in the wrapper and entrypoint, Docker propagation, and health/dry-run visibility. SQLite's 5000 ms busy timeout and fixed 5-second KILL escalation remain unchanged.

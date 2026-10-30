@@ -15,10 +15,7 @@ assert_contains "$dockerfile_contents" "grep -Eq '^v22\\.(0|[1-9][0-9]*)\\.(0|[1
 assert_contains "$dockerfile_contents" "node_major=\"\${node_major%%.*}\""
 assert_contains "$dockerfile_contents" "/opt/opencode-web-yolo-node-version"
 assert_contains "$dockerfile_contents" "/opt/opencode-web-yolo-node-major"
-assert_contains "$dockerfile_contents" "npm install -g \"@opencode/cli@\${OPENCODE_VERSION}\""
-assert_contains "$dockerfile_contents" "ARG OPENCODE_VERSION=2.2.1"
-assert_contains "$dockerfile_contents" "opencode_version=\"\$(opencode --version)\""
-assert_contains "$dockerfile_contents" '(?:opencode v)?'
+assert_contains "$dockerfile_contents" "npm install -g \"opencode-ai@\${OPENCODE_VERSION}\""
 assert_not_contains "$dockerfile_contents" "ARG OPENCODE_NPM_PACKAGE"
 assert_contains "$dockerfile_contents" "mkdir -p \"\${PLAYWRIGHT_BROWSERS_PATH}\""
 assert_contains "$dockerfile_contents" "chmod 1777 \"\${PLAYWRIGHT_BROWSERS_PATH}\""
